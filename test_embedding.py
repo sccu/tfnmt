@@ -4,6 +4,7 @@ import logging
 
 import tensorflow as tf
 import numpy as np
+from tensorflow.contrib.rnn.python.ops import core_rnn_cell
 
 FLAGS = tf.app.flags.FLAGS
 LOG = logging.getLogger()
@@ -21,7 +22,7 @@ def get_batch(batch_size):
   return degrees, coords
 
 
-def m(argv=None):
+def embedding_main(argv=None):
 
   cell_size = 20
   batch_size = 8
@@ -47,6 +48,30 @@ def m(argv=None):
       print "{}:{}, {} => {} / {}".format(i, cost, xs[0], labels[0], inferences[0])
 
 
+def lstm_main():
+  cell_size = 20
+  embedding_size = 5
+  seq_len = 5
+  batch_size = 8
+
+  with tf.variable_scope("lstm_main") as scope:
+    cell = core_rnn_cell.BasicLSTMCell(cell_size)
+    cell = core_rnn_cell.MultiRNNCell([cell] * 2)
+    cell = core_rnn_cell.EmbeddingWrapper(cell, 10, embedding_size)
+    print "output_size: %s, state_size: %s" % (cell.output_size, cell.state_size)
+
+    inputs = []
+    for i in xrange(seq_len):
+      input = tf.placeholder(dtype=tf.int32, shape=[None], name="input{}".format(i))
+      inputs.append(input)
+
+    state = cell.zero_state(batch_size, tf.float32)
+    for i in xrange(seq_len):
+      output, state = cell(inputs[i], state, scope=scope)
+      if i == 0:
+        scope.reuse_variables()
+
 
 if __name__ == "__main__":
-  m()
+  # embedding_main()
+  lstm_main()

@@ -2,9 +2,10 @@ import cPickle
 import os
 from collections import Counter
 
+import logging
 from google import protobuf
 
-from main import LOG
+LOG = logging.getLogger()
 
 
 class DataSet(object):
