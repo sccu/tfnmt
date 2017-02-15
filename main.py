@@ -5,12 +5,15 @@ import logging
 import tensorflow as tf
 from tensorflow.contrib.rnn.python.ops import core_rnn_cell
 
+from dataset import DataSet
+
 FLAGS = tf.app.flags.FLAGS
 LOG = logging.getLogger()
 logging.basicConfig(format="%(asctime)s %(levelname)-8s %(message)s", level=logging.DEBUG)
 
 tf.app.flags.DEFINE_float("learning_rate", 0.01, "Learning rate")
 tf.app.flags.DEFINE_integer("batch_size", 16, "Batch size")
+tf.app.flags.DEFINE_integer("max_data_size", 100000, "Maximum data size")
 
 
 class Seq2SeqModel(object):
@@ -77,7 +80,7 @@ class Seq2SeqModel(object):
 
 
 def main(argv=None):
-  # data_manager = DataSet()
+  data_manager = DataSet("train.zh", "train.kr", "test.zh", "test.kr", FLAGS.max_data_size)
 
   cell_size = 20
   batch_size = 8
@@ -88,41 +91,6 @@ def main(argv=None):
 
   model = Seq2SeqModel(cell_size, stack_size, batch_size, seq_len, vocab_size, num_embeddings)
 
-  return
-
-  # Initial state of the LSTM memory.
-  state = tf.zeros([batch_size, lstm.state_size])
-  probabilities = []
-  softmax_w = tf.get_variable("softmax_w", [None, seq_len], tf.float)
-  softmax_b = tf.get_variable("softmax_b", [seq_len], tf.float)
-  loss = 0.0
-  for current_batch_of_words in words_in_dataset:
-    # The value of state is updated after processing each batch of words.
-    output, state = lstm(current_batch_of_words, state)
-
-    # The LSTM output can be used to make next word predictions
-    logits = tf.matmul(output, softmax_w) + softmax_b
-    probabilities.append(tf.nn.softmax(logits))
-    loss += loss_function(probabilities, target_words)
-
-
-"""
-  def cond(index, q):
-    return tf.less(index, 10)
-
-  def body(index, q):
-    index = tf.add(index, 1)
-    # q.enque(index)
-    return [index, q]
-
-  i = tf.constant(0)
-  q = tf.FIFOQueue(100, tf.int32)
-  r = tf.while_loop(cond, body, (i, q))
-
-  sess = tf.InteractiveSession()
-  print sess.run(r)
-  # print l
-"""
 
 if __name__ == "__main__":
   tf.app.run()

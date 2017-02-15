@@ -3,6 +3,8 @@ import os
 from collections import Counter
 
 import logging
+
+import sys
 from google import protobuf
 
 LOG = logging.getLogger()
@@ -10,8 +12,10 @@ LOG = logging.getLogger()
 
 class DataSet(object):
   EOS_ID = 0
-  UNK_ID = 1
+  PAD_ID = 1
+  UNK_ID = 2
   EOS = "<EOS>"
+  PAD = "<PAD>"
   UNK = "<UNK>"
 
   @classmethod
@@ -30,17 +34,19 @@ class DataSet(object):
   def load_vocab(cls, vocab_path):
     LOG.info("Loading vocab: " + vocab_path)
     vocab = dict()
-    for id, l in enumerate(open(vocab_path)):
-      w = l.strip().decode("utf-8")
-      vocab.update({w: id})
+    for l in open(vocab_path):
+      cols = l.strip().decode("utf-8").split("\t")
+      w = cols[0]
+      i = int(cols[1])
+      vocab.update({w: i})
     return vocab
 
   @staticmethod
   def store_vocab(vocab, path):
     LOG.info("Storing vocab into: " + path)
     with open(path, "wt") as f:
-      for w in vocab:
-        f.write("{}\n".format(w.encode("utf-8")))
+      for w, i in vocab.iteritems():
+        f.write("{}\t{}\n".format(w.encode("utf-8"), i))
 
   @classmethod
   def create_vocab(cls, corpus_path):
@@ -49,29 +55,31 @@ class DataSet(object):
     with open(corpus_path) as f:
       for i, line in enumerate(f):
         if (i + 1) % 100000 == 0:
-          print "Processing %d lines for creating vocabulary..." % (i + 1)
+          LOG.debug("\tProcessing %d lines for creating vocabulary...", i + 1)
         words = line.strip().decode("utf-8").split(" ")
         for w in words:
           vocab_counter[w] += 1
-    return [cls.EOS, cls.UNK] + vocab_counter.keys()
+    words = [entry[0] for entry in vocab_counter.most_common()]
+    words = [cls.EOS, cls.PAD, cls.UNK] + words
+    return {w: i for i, w in enumerate(words)}
 
-  def __init__(self):
+  def __init__(self, src_train, tgt_train, src_test, tgt_test, max_data_size=sys.maxsize):
     root_dir = os.path.dirname(os.path.realpath(__file__))
     self.data_dir = os.path.join(root_dir, "data")
     self.out_dir = os.path.join(root_dir, "out")
 
-    self.src_train_path = os.path.join(self.data_dir, "train.zh")
-    self.tgt_train_path = os.path.join(self.data_dir, "train.kr")
-    self.src_test_path = os.path.join(self.data_dir, "test.zh")
-    self.tgt_test_path = os.path.join(self.data_dir, "test.kr")
+    self.src_train_path = os.path.join(self.data_dir, src_train)
+    self.tgt_train_path = os.path.join(self.data_dir, tgt_train)
+    self.src_test_path = os.path.join(self.data_dir, src_test)
+    self.tgt_test_path = os.path.join(self.data_dir, tgt_test)
 
     self.src_vocab = DataSet.get_vocab(self.src_train_path, self.out_dir)
     self.tgt_vocab = DataSet.get_vocab(self.tgt_train_path, self.out_dir)
 
-    self.test_dataset = self.get_data(self.src_test_path, self.tgt_test_path, self.out_dir)
-    self.train_dataset = self.get_data(self.src_train_path, self.tgt_train_path, self.out_dir)
+    self.test_dataset = self.prepare_data(self.src_test_path, self.tgt_test_path, self.out_dir, max_data_size)
+    self.train_dataset = self.prepare_data(self.src_train_path, self.tgt_train_path, self.out_dir, max_data_size)
 
-  def get_data(self, src_corpus_path, tgt_corpus_path, out_dir):
+  def prepare_data(self, src_corpus_path, tgt_corpus_path, out_dir, max_data_size):
     src_filename = os.path.basename(src_corpus_path)
     src_ids_path = os.path.join(out_dir, src_filename + ".ids")
     tgt_filename = os.path.basename(tgt_corpus_path)
@@ -80,19 +88,21 @@ class DataSet(object):
       return self.restore_data(src_ids_path), self.restore_data(tgt_ids_path)
     else:
       LOG.info("Load data from: [%s, %s]", src_ids_path, tgt_ids_path)
-      src_inputs, tgt_inputs = self.load_data(src_corpus_path, tgt_corpus_path)
+      src_inputs, tgt_inputs = self.load_data(src_corpus_path, tgt_corpus_path, max_data_size)
       self.store_data(src_inputs, src_ids_path)
       self.store_data(tgt_inputs, tgt_ids_path)
       return src_inputs, tgt_inputs
 
-  def load_data(self, src_path, tgt_path):
+  def load_data(self, src_path, tgt_path, max_data_size):
     src_inputs = []
     tgt_inputs = []
     with open(src_path) as src:
       with open(tgt_path) as tgt:
         for i, (s, t) in enumerate(zip(src, tgt)):
+          if i >= max_data_size:
+            break
           if (i + 1) % 100000 == 0:
-            print "Loading data %d lines..." % (i + 1)
+            LOG.debug("\tLoading data %d lines...", i + 1)
           swords = s.strip().decode("utf-8").split()
           twords = t.strip().decode("utf-8").split()
           if len(swords) >= 80 or len(twords) >= 80:
@@ -107,7 +117,6 @@ class DataSet(object):
   def store_data(ids_inputs, path):
     with open(path, "wt") as f:
       cPickle.dump(ids_inputs, f)
-      protobuf
 
   @staticmethod
   def restore_data(ids_path):
