@@ -145,3 +145,6 @@ class DataSet(object):
         dec_inputs[t].append(tgt[b][t] if t < len(tgt[b]) else self.PAD_ID)
 
     return enc_inputs, dec_inputs
+
+  def get_trainset_size(self):
+    return len(self.train_dataset[0])
