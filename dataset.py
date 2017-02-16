@@ -19,6 +19,7 @@ class DataSet(object):
   EOS = "<EOS>"
   PAD = "<PAD>"
   UNK = "<UNK>"
+  predefined_words = [BOS, EOS, PAD, UNK]
 
   def get_vocab(self, corpus_path, out_dir):
     filename = os.path.basename(corpus_path)
@@ -59,8 +60,8 @@ class DataSet(object):
         words = line.strip().decode("utf-8").split(" ")
         for w in words:
           vocab_counter[w] += 1
-    words = [entry[0] for entry in vocab_counter.most_common(self.vocab_size)]
-    words = [self.EOS, self.PAD, self.UNK] + words
+    words = self.predefined_words + [entry[0] for entry in
+                                     vocab_counter.most_common(self.vocab_size - len(self.predefined_words))]
     return {w: i for i, w in enumerate(words)}
 
   def __init__(self, src_train, tgt_train, src_test, tgt_test, seq_len, vocab_size, max_data_size=sys.maxsize):
@@ -110,7 +111,7 @@ class DataSet(object):
           twords = t.strip().decode("utf-8").split()
           src_ids = [self.src_vocab.get(w, self.UNK_ID) for w in swords] + [self.EOS_ID]
           tgt_ids = [self.BOS_ID] + [self.tgt_vocab.get(w, self.UNK_ID) for w in twords] + [self.EOS_ID]
-          if len(src_ids) >= self.seq_len or len(tgt_ids)  >= self.seq_len:
+          if len(src_ids) >= self.seq_len or len(tgt_ids) >= self.seq_len:
             continue
           src_inputs.append(src_ids)
           tgt_inputs.append(tgt_ids)
@@ -129,8 +130,8 @@ class DataSet(object):
     return inputs
 
   def get_batch(self, offset, batch_size):
-    src = self.train_dataset[0][offset:offset+batch_size]
-    tgt = self.train_dataset[1][offset:offset+batch_size]
+    src = self.train_dataset[0][offset:offset + batch_size]
+    tgt = self.train_dataset[1][offset:offset + batch_size]
 
     enc_inputs = []
     dec_inputs = []
@@ -144,5 +145,3 @@ class DataSet(object):
         dec_inputs[t].append(tgt[b][t] if t < len(tgt[b]) else self.PAD_ID)
 
     return enc_inputs, dec_inputs
-
-
