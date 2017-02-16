@@ -11,22 +11,23 @@ LOG = logging.getLogger()
 
 
 class DataSet(object):
-  EOS_ID = 0
-  PAD_ID = 1
-  UNK_ID = 2
+  BOS_ID = 0
+  EOS_ID = 1
+  PAD_ID = 2
+  UNK_ID = 3
+  BOS = "<BOS>"
   EOS = "<EOS>"
   PAD = "<PAD>"
   UNK = "<UNK>"
 
-  @classmethod
-  def get_vocab(cls, corpus_path, out_dir):
+  def get_vocab(self, corpus_path, out_dir):
     filename = os.path.basename(corpus_path)
     vocab_path = os.path.join(out_dir, filename + ".vocab")
     if os.path.exists(vocab_path):
-      vocab = cls.load_vocab(vocab_path)
+      vocab = self.load_vocab(vocab_path)
     else:
-      vocab = cls.create_vocab(corpus_path)
-      cls.store_vocab(vocab, vocab_path)
+      vocab = self.create_vocab(corpus_path)
+      self.store_vocab(vocab, vocab_path)
     LOG.info("Vocab count of %s: %d", vocab_path, len(vocab))
     return vocab
 
@@ -48,8 +49,7 @@ class DataSet(object):
       for w, i in vocab.iteritems():
         f.write("{}\t{}\n".format(w.encode("utf-8"), i))
 
-  @classmethod
-  def create_vocab(cls, corpus_path):
+  def create_vocab(self, corpus_path):
     LOG.info("Creating vocab from: " + corpus_path)
     vocab_counter = Counter()
     with open(corpus_path) as f:
@@ -59,11 +59,14 @@ class DataSet(object):
         words = line.strip().decode("utf-8").split(" ")
         for w in words:
           vocab_counter[w] += 1
-    words = [entry[0] for entry in vocab_counter.most_common()]
-    words = [cls.EOS, cls.PAD, cls.UNK] + words
+    words = [entry[0] for entry in vocab_counter.most_common(self.vocab_size)]
+    words = [self.EOS, self.PAD, self.UNK] + words
     return {w: i for i, w in enumerate(words)}
 
-  def __init__(self, src_train, tgt_train, src_test, tgt_test, max_data_size=sys.maxsize):
+  def __init__(self, src_train, tgt_train, src_test, tgt_test, seq_len, vocab_size, max_data_size=sys.maxsize):
+    self.seq_len = seq_len
+    self.vocab_size = vocab_size
+
     root_dir = os.path.dirname(os.path.realpath(__file__))
     self.data_dir = os.path.join(root_dir, "data")
     self.out_dir = os.path.join(root_dir, "out")
@@ -73,8 +76,8 @@ class DataSet(object):
     self.src_test_path = os.path.join(self.data_dir, src_test)
     self.tgt_test_path = os.path.join(self.data_dir, tgt_test)
 
-    self.src_vocab = DataSet.get_vocab(self.src_train_path, self.out_dir)
-    self.tgt_vocab = DataSet.get_vocab(self.tgt_train_path, self.out_dir)
+    self.src_vocab = self.get_vocab(self.src_train_path, self.out_dir)
+    self.tgt_vocab = self.get_vocab(self.tgt_train_path, self.out_dir)
 
     self.test_dataset = self.prepare_data(self.src_test_path, self.tgt_test_path, self.out_dir, max_data_size)
     self.train_dataset = self.prepare_data(self.src_train_path, self.tgt_train_path, self.out_dir, max_data_size)
@@ -105,10 +108,10 @@ class DataSet(object):
             LOG.debug("\tLoading data %d lines...", i + 1)
           swords = s.strip().decode("utf-8").split()
           twords = t.strip().decode("utf-8").split()
-          if len(swords) >= 80 or len(twords) >= 80:
-            continue
           src_ids = [self.src_vocab.get(w, self.UNK_ID) for w in swords] + [self.EOS_ID]
-          tgt_ids = [self.tgt_vocab.get(w, self.UNK_ID) for w in twords] + [self.EOS_ID]
+          tgt_ids = [self.BOS_ID] + [self.tgt_vocab.get(w, self.UNK_ID) for w in twords] + [self.EOS_ID]
+          if len(src_ids) >= self.seq_len or len(tgt_ids)  >= self.seq_len:
+            continue
           src_inputs.append(src_ids)
           tgt_inputs.append(tgt_ids)
     return src_inputs, tgt_inputs
@@ -124,3 +127,22 @@ class DataSet(object):
     with open(ids_path) as f:
       inputs = cPickle.load(f)
     return inputs
+
+  def get_batch(self, offset, batch_size):
+    src = self.train_dataset[0][offset:offset+batch_size]
+    tgt = self.train_dataset[1][offset:offset+batch_size]
+
+    enc_inputs = []
+    dec_inputs = []
+    for t in xrange(self.seq_len):
+      enc_inputs.append([])
+      dec_inputs.append([])
+      enc_inputs[t]
+      dec_inputs[t]
+      for b in xrange(batch_size):
+        enc_inputs[t].append(src[b][t] if t < len(src[b]) else self.PAD_ID)
+        dec_inputs[t].append(tgt[b][t] if t < len(tgt[b]) else self.PAD_ID)
+
+    return enc_inputs, dec_inputs
+
+

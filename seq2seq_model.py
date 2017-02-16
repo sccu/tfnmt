@@ -3,10 +3,13 @@ from tensorflow.contrib.rnn.python.ops import core_rnn_cell
 
 
 class Seq2SeqModel(object):
-  def __init__(self, cell_size, stack_size, batch_size, seq_len, vocab_size, embedding_size):
+  def __init__(self, cell_size, stack_size, batch_size, seq_len, vocab_size, embedding_size, learning_rate):
     self.BOS_ID = 0
+    self.seq_len = seq_len
     self.vocab_size = vocab_size
     self.embedding_size = embedding_size
+    self.learning_rate = learning_rate
+
     self.enc_inputs = []
     self.dec_inputs = []
     num_samples = 512
@@ -40,6 +43,7 @@ class Seq2SeqModel(object):
           dtype=tf.float32)
 
       self.loss = self.sequence_loss(dec_outputs, self.dec_labels, softmax_loss_function=sampled_loss)
+      self.optim = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
 
   def sequence_loss(self, logits, labels, softmax_loss_function):
     with tf.variable_scope("loss") as scope:
@@ -47,7 +51,7 @@ class Seq2SeqModel(object):
       for logit, label in zip(logits, labels):
         cross_entropy = softmax_loss_function(logit, label)
         losses.append(cross_entropy)
-      log_ppl = tf.add_n(losses) / len(labels)
+      log_ppl = tf.reduce_mean(tf.add_n(losses) / len(labels))
       return log_ppl
 
   def create_rnn_encoder(self, cell_size, stack_size, batch_size, seq_len, vocab_size, embedding_size):
@@ -100,3 +104,19 @@ class Seq2SeqModel(object):
         output, state = embedded_cell(self.dec_inputs[i], state)
         outputs.append(output)
       return outputs, state
+
+  def step(self, sess, enc_inputs, dec_inputs):
+    """
+
+    :param sess:
+    :param enc_inputs: [seq_len, batch_size] int32 array.
+    :param dec_inputs: [seq_len, batch_size] int32 array.
+    :return:
+    """
+    feed_dict = {}
+    for i in xrange(self.seq_len):
+      feed_dict[self.enc_inputs[i].name] = enc_inputs[i]
+      feed_dict[self.dec_inputs[i].name] = dec_inputs[i]
+
+    return sess.run([self.loss, self.optim], feed_dict)[0]
+
