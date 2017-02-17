@@ -138,8 +138,6 @@ class DataSet(object):
     for t in xrange(self.seq_len):
       enc_inputs.append([])
       dec_inputs.append([])
-      enc_inputs[t]
-      dec_inputs[t]
       for b in xrange(batch_size):
         enc_inputs[t].append(src[b][t] if t < len(src[b]) else self.PAD_ID)
         dec_inputs[t].append(tgt[b][t] if t < len(tgt[b]) else self.PAD_ID)

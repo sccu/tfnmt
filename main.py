@@ -22,7 +22,6 @@ tf.app.flags.DEFINE_integer("embedding_size", 100, "Word embedding size")
 tf.app.flags.DEFINE_integer("vocab_size", 50000, "Vocab size")
 tf.app.flags.DEFINE_float("learning_rate", 0.01, "Learning rate")
 tf.app.flags.DEFINE_integer("steps_per_print", 100, "Steps per print")
-tf.app.flags.DEFINE_string("save_path", None, "Save path")
 
 
 def main(argv=None):
@@ -35,8 +34,6 @@ def main(argv=None):
                        FLAGS.embedding_size, FLAGS.learning_rate)
   saver = tf.train.Saver()
 
-  save_path_prefix = "out/model.ckpt"
-  save_path = FLAGS.save_path
   with tf.Session() as sess:
     ckpt = tf.train.get_checkpoint_state("out")
     if ckpt and ckpt.model_checkpoint_path:
@@ -59,11 +56,18 @@ def main(argv=None):
           ppl = np.exp(total_loss / FLAGS.steps_per_print)
           LOG.info("Epoch: %d, batch: %d/%d, PPL: %f", epoch, int(offset / FLAGS.batch_size) + 1,
                    data_manager.get_trainset_size() / FLAGS.batch_size, ppl)
+          output_ids = model.inference(sess, enc_inputs, dec_inputs)
+          src = np.transpose(enc_inputs)
+          tgt = np.transpose(dec_inputs)
+          LOG.debug("source: %s", src[0])
+          LOG.debug("target: %s", tgt[0])
+          LOG.debug("inference: %s", output_ids[0])
           total_loss = 0
         if (offset / FLAGS.batch_size + 1) % (100 * FLAGS.steps_per_print) == 0:
-          save_path = saver.save(sess, "model.ckpt-%02d-%.3f" % (epoch, ppl))
+          save_path = saver.save(sess, "out/model.ckpt-%02d-%.3f" % (epoch, ppl), global_step)
           LOG.info("Model saved in the file: %s", save_path)
-    saver.save(sess, "model.ckpt-%02d-%.3f" % (epoch, ppl))
+
+    saver.save(sess, "out/model.ckpt-%02d-%.3f" % (epoch, ppl))
 
 
 if __name__ == "__main__":

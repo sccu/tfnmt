@@ -1,5 +1,10 @@
+import logging
 import tensorflow as tf
 from tensorflow.contrib.rnn.python.ops import core_rnn_cell
+from tensorflow.python.ops import control_flow_ops
+from tensorflow.python.util import nest
+
+LOG = logging.getLogger()
 
 
 class Seq2SeqModel(object):
@@ -15,21 +20,24 @@ class Seq2SeqModel(object):
     num_samples = 512
 
     with tf.variable_scope("seq2seq"):
-      enc_outputs, enc_state = self.create_rnn_encoder(cell_size, stack_size, batch_size, seq_len, vocab_size,
-                                                       embedding_size)
-      dec_outputs, dec_state = self.create_rnn_decoder(enc_state, cell_size, stack_size, batch_size, seq_len,
-                                                       vocab_size, embedding_size)
-      self.dec_outputs = dec_outputs
-      self.dec_labels = self.dec_inputs[1:]
-
-      # If we use sampled softmax, we need an output projection.
-      output_projection = None
-      # Sampled softmax only makes sense if we sample less than vocabulary size.
-
       w_t = tf.get_variable("proj_w", [vocab_size, cell_size])
       w = tf.transpose(w_t)
       b = tf.get_variable("proj_b", [vocab_size])
-      output_projection = (w, b)
+      self.output_projection = (w, b)
+
+      self.for_inference = tf.placeholder(tf.bool)
+
+      _, enc_state = self.create_rnn_encoder(cell_size, stack_size, batch_size, seq_len, vocab_size, embedding_size)
+      ret = self.create_rnn_decoder(enc_state, cell_size, stack_size, batch_size, seq_len,
+                                    vocab_size, embedding_size)
+      self.dec_outputs = ret[:seq_len]
+      self.inference_outputs = [tf.argmax(tf.matmul(o, self.output_projection[0]) + self.output_projection[1], axis=1)
+                                for o in self.dec_outputs]
+      self.inference_outputs = tf.transpose(self.inference_outputs)
+      dec_state = ret[seq_len:]
+      self.dec_labels = self.dec_inputs[1:]
+
+      # word id outputs
 
       def sampled_loss(inputs, labels):
         labels = tf.reshape(labels, [-1, 1])
@@ -42,7 +50,7 @@ class Seq2SeqModel(object):
           tf.nn.sampled_softmax_loss(local_w_t, local_b, labels, local_inputs, num_samples, vocab_size),
           dtype=tf.float32)
 
-      self.loss = self.sequence_loss(dec_outputs, self.dec_labels, softmax_loss_function=sampled_loss)
+      self.loss = self.sequence_loss(self.dec_outputs, self.dec_labels, softmax_loss_function=sampled_loss)
       self.optim = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
 
       # write logs
@@ -71,7 +79,6 @@ class Seq2SeqModel(object):
         self.enc_inputs.append(enc_input)
 
       state = embedded_cell.zero_state(batch_size, tf.float32)
-      # state = tf.zeros([None, cell_size], tf.float32)
       outputs = []
       for i in xrange(seq_len):
         if i > 0:
@@ -99,17 +106,26 @@ class Seq2SeqModel(object):
       embedded_cell = core_rnn_cell.EmbeddingWrapper(stacked_lstm, vocab_size, embedding_size)
 
       for i in xrange(seq_len):
-        dec_input= tf.placeholder(tf.int32, [None], name="dec_input{}".format(i))
+        dec_input = tf.placeholder(tf.int32, [None], name="dec_input{}".format(i))
         self.dec_inputs.append(dec_input)
 
-      state = encoder_state
-      outputs = []
-      for i in xrange(seq_len):
-        if i > 0:
-          scope.reuse_variables()
-        output, state = embedded_cell(self.dec_inputs[i], state)
-        outputs.append(output)
-      return outputs, state
+      def feeder(for_inference=False):
+        state = encoder_state
+        emb_outputs = []
+        for i in xrange(seq_len):
+          if i > 0:
+            scope.reuse_variables()
+          if for_inference and i > 0:
+            next_input = tf.argmax(tf.matmul(emb_output, self.output_projection[0]) + self.output_projection[1], axis=1)
+          else:
+            next_input = self.dec_inputs[i]
+          emb_output, state = embedded_cell(next_input, state)
+          emb_outputs.append(emb_output)
+        state_list = nest.flatten(state)
+        return emb_outputs + state_list
+
+      return control_flow_ops.cond(self.for_inference, lambda: feeder(True), lambda: feeder(False))
+      # return feeder(False)
 
   def step(self, sess, enc_inputs, dec_inputs, global_step):
     """
@@ -120,7 +136,7 @@ class Seq2SeqModel(object):
     :param global_step:
     :return:
     """
-    feed_dict = {}
+    feed_dict = {self.for_inference.name: False}
     for i in xrange(self.seq_len):
       feed_dict[self.enc_inputs[i].name] = enc_inputs[i]
       feed_dict[self.dec_inputs[i].name] = dec_inputs[i]
@@ -132,3 +148,11 @@ class Seq2SeqModel(object):
     else:
       return sess.run([self.loss, self.optim], feed_dict)[0]
 
+  def inference(self, sess, enc_inputs, dec_inputs):
+    feed_dict = {self.for_inference.name: True}
+    for i in xrange(self.seq_len):
+      feed_dict[self.enc_inputs[i].name] = enc_inputs[i]
+      feed_dict[self.dec_inputs[i].name] = dec_inputs[i]
+
+    ret = sess.run(self.inference_outputs, feed_dict)
+    return ret
