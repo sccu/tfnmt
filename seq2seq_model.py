@@ -47,6 +47,7 @@ class Seq2SeqModel(object):
 
       # write logs
       tf.summary.scalar("loss", self.loss)
+      tf.summary.scalar("PPL", tf.exp(self.loss))
       self.merged = tf.summary.merge_all()
       self.train_writer = tf.summary.FileWriter("log")
 
