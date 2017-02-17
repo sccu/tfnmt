@@ -21,48 +21,46 @@ class DataSet(object):
   UNK = "<UNK>"
   predefined_words = [BOS, EOS, PAD, UNK]
 
-  def get_vocab(self, corpus_path, out_dir):
+  def get_words(self, corpus_path, out_dir):
     filename = os.path.basename(corpus_path)
-    vocab_path = os.path.join(out_dir, filename + ".vocab")
-    if os.path.exists(vocab_path):
-      vocab = self.load_vocab(vocab_path)
+    dict_path = os.path.join(out_dir, filename + ".dict")
+    if os.path.exists(dict_path):
+      words = self.load_dict(dict_path)
     else:
-      vocab = self.create_vocab(corpus_path)
-      self.store_vocab(vocab, vocab_path)
-    LOG.info("Vocab count of %s: %d", vocab_path, len(vocab))
-    return vocab
+      words = self.extract_words(corpus_path)
+      self.store_words(words, dict_path)
+    LOG.info("Word count of %s: %d", dict_path, len(words))
+    return words
 
   @classmethod
-  def load_vocab(cls, vocab_path):
-    LOG.info("Loading vocab: " + vocab_path)
-    vocab = dict()
-    for l in open(vocab_path):
-      cols = l.strip().decode("utf-8").split("\t")
-      w = cols[0]
-      i = int(cols[1])
-      vocab.update({w: i})
-    return vocab
+  def load_dict(cls, dict_path):
+    LOG.info("Loading dict: " + dict_path)
+    words = []
+    for l in open(dict_path):
+      word = l.strip().decode("utf-8")
+      words.append(word)
+    return words
 
   @staticmethod
-  def store_vocab(vocab, path):
-    LOG.info("Storing vocab into: " + path)
+  def store_words(words, path):
+    LOG.info("Storing words into: " + path)
     with open(path, "wt") as f:
-      for w, i in vocab.iteritems():
-        f.write("{}\t{}\n".format(w.encode("utf-8"), i))
+      for w in words:
+        f.write("{}\n".format(w.encode("utf-8")))
 
-  def create_vocab(self, corpus_path):
+  def extract_words(self, corpus_path):
     LOG.info("Creating vocab from: " + corpus_path)
     vocab_counter = Counter()
     with open(corpus_path) as f:
       for i, line in enumerate(f):
         if (i + 1) % 100000 == 0:
-          LOG.debug("\tProcessing %d lines for creating vocabulary...", i + 1)
+          LOG.debug("  Processing %d lines for creating vocabulary...", i + 1)
         words = line.strip().decode("utf-8").split(" ")
         for w in words:
           vocab_counter[w] += 1
     words = self.predefined_words + [entry[0] for entry in
                                      vocab_counter.most_common(self.vocab_size - len(self.predefined_words))]
-    return {w: i for i, w in enumerate(words)}
+    return words
 
   def __init__(self, src_train, tgt_train, src_test, tgt_test, seq_len, vocab_size, max_data_size=sys.maxsize):
     self.seq_len = seq_len
@@ -77,8 +75,10 @@ class DataSet(object):
     self.src_test_path = os.path.join(self.data_dir, src_test)
     self.tgt_test_path = os.path.join(self.data_dir, tgt_test)
 
-    self.src_vocab = self.get_vocab(self.src_train_path, self.out_dir)
-    self.tgt_vocab = self.get_vocab(self.tgt_train_path, self.out_dir)
+    self.src_words = self.get_words(self.src_train_path, self.out_dir)
+    self.src_vocab = {w: i for i, w in enumerate(self.src_words)}
+    self.tgt_words = self.get_words(self.tgt_train_path, self.out_dir)
+    self.tgt_vocab = {w: i for i, w in enumerate(self.tgt_words)}
 
     self.test_dataset = self.prepare_data(self.src_test_path, self.tgt_test_path, self.out_dir, max_data_size)
     self.train_dataset = self.prepare_data(self.src_train_path, self.tgt_train_path, self.out_dir, max_data_size)
@@ -106,7 +106,7 @@ class DataSet(object):
           if i >= max_data_size:
             break
           if (i + 1) % 100000 == 0:
-            LOG.debug("\tLoading data %d lines...", i + 1)
+            LOG.debug("  Loading data %d lines...", i + 1)
           swords = s.strip().decode("utf-8").split()
           twords = t.strip().decode("utf-8").split()
           src_ids = [self.src_vocab.get(w, self.UNK_ID) for w in swords] + [self.EOS_ID]
@@ -144,5 +144,29 @@ class DataSet(object):
 
     return enc_inputs, dec_inputs
 
+  def get_batch2(self, offset, batch_size):
+    src = self.train_dataset[0][offset:offset + batch_size]
+    tgt = self.train_dataset[1][offset:offset + batch_size]
+
+    enc_inputs = []
+    dec_inputs = []
+    for i in xrange(batch_size):
+      enc_inputs.append(src[i] + [self.PAD_ID] * (self.seq_len - len(src[i])))
+      dec_inputs.append(tgt[i] + [self.PAD_ID] * (self.seq_len - len(tgt[i])))
+
+    return enc_inputs, dec_inputs
+
   def get_trainset_size(self):
     return len(self.train_dataset[0])
+
+  def src_ids_to_words(self, ids):
+    return [self.src_words[id] for id in ids]
+
+  def tgt_ids_to_words(self, ids):
+    return [self.tgt_words[id] for id in ids]
+
+  def src_ids_to_str(self, ids):
+    return " ".join([self.src_words[id] for id in ids if id not in [self.BOS_ID, self.EOS_ID, self.PAD_ID]])
+
+  def tgt_ids_to_str(self, ids):
+    return " ".join([self.tgt_words[id] for id in ids if id not in [self.BOS_ID, self.EOS_ID, self.PAD_ID]])
