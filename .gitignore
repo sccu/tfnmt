@@ -135,6 +135,5 @@ ENV/
 .ropeproject
 
 .idea/
-data
-tfdata
-tfout
+data/
+log/

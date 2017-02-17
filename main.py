@@ -12,13 +12,13 @@ FLAGS = tf.app.flags.FLAGS
 LOG = logging.getLogger()
 logging.basicConfig(format="%(asctime)s %(levelname)-8s %(message)s", level=logging.DEBUG)
 
-tf.app.flags.DEFINE_integer("batch_size", 32, "Batch size")
-tf.app.flags.DEFINE_integer("max_data_size", 100000, "Maximum data size")
+tf.app.flags.DEFINE_integer("batch_size", 16, "Batch size")
+tf.app.flags.DEFINE_integer("max_data_size", 200000, "Maximum data size")
 tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs")
-tf.app.flags.DEFINE_integer("cell_size", 20, "LSTM cell size")
-tf.app.flags.DEFINE_integer("seq_len", 10, "Maximum sequence length")
+tf.app.flags.DEFINE_integer("cell_size", 500, "LSTM cell size")
+tf.app.flags.DEFINE_integer("seq_len", 20, "Maximum sequence length")
 tf.app.flags.DEFINE_integer("stack_size", 2, "RNN stack size")
-tf.app.flags.DEFINE_integer("embedding_size", 10, "Word embedding size")
+tf.app.flags.DEFINE_integer("embedding_size", 100, "Word embedding size")
 tf.app.flags.DEFINE_integer("vocab_size", 50000, "Vocab size")
 tf.app.flags.DEFINE_integer("learning_rate", 0.001, "Learning rate")
 tf.app.flags.DEFINE_integer("steps_per_print", 100, "Steps per print")
@@ -36,10 +36,12 @@ def main(argv=None):
   with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     total_loss = 0
+    global_step = 0
     for epoch in xrange(1, FLAGS.epochs + 1):
       for offset in range(0, data_manager.get_trainset_size() - FLAGS.batch_size, FLAGS.batch_size):
+        global_step += 1
         enc_inputs, dec_inputs = data_manager.get_batch(offset, FLAGS.batch_size)
-        loss = model.step(sess, enc_inputs, dec_inputs)
+        loss = model.step(sess, enc_inputs, dec_inputs, global_step)
         total_loss += loss
         if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_print == 0:
           LOG.info("Epoch: %d, batch: %d/%d, loss: %f", epoch, int(offset / FLAGS.batch_size) + 1,

@@ -45,6 +45,11 @@ class Seq2SeqModel(object):
       self.loss = self.sequence_loss(dec_outputs, self.dec_labels, softmax_loss_function=sampled_loss)
       self.optim = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
 
+      # write logs
+      tf.summary.scalar("loss", self.loss)
+      self.merged = tf.summary.merge_all()
+      self.train_writer = tf.summary.FileWriter("log")
+
   def sequence_loss(self, logits, labels, softmax_loss_function):
     with tf.variable_scope("loss") as scope:
       losses = []
@@ -105,7 +110,7 @@ class Seq2SeqModel(object):
         outputs.append(output)
       return outputs, state
 
-  def step(self, sess, enc_inputs, dec_inputs):
+  def step(self, sess, enc_inputs, dec_inputs, global_step):
     """
 
     :param sess:
@@ -118,5 +123,10 @@ class Seq2SeqModel(object):
       feed_dict[self.enc_inputs[i].name] = enc_inputs[i]
       feed_dict[self.dec_inputs[i].name] = dec_inputs[i]
 
-    return sess.run([self.loss, self.optim], feed_dict)[0]
+    if global_step % 100 == 0:
+      loss, _, summary = sess.run([self.loss, self.optim, self.merged], feed_dict)
+      self.train_writer.add_summary(summary, global_step)
+      return loss
+    else:
+      return sess.run([self.loss, self.optim], feed_dict)[0]
 
