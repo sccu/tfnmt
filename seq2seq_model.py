@@ -116,6 +116,7 @@ class Seq2SeqModel(object):
     :param sess:
     :param enc_inputs: [seq_len, batch_size] int32 array.
     :param dec_inputs: [seq_len, batch_size] int32 array.
+    :param global_step:
     :return:
     """
     feed_dict = {}

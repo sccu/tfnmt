@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 import logging
 
+import numpy as np
 import tensorflow as tf
-from tensorflow.contrib.rnn.python.ops import core_rnn_cell
 
 from dataset import DataSet
 from seq2seq_model import Seq2SeqModel
@@ -44,8 +44,8 @@ def main(argv=None):
         loss = model.step(sess, enc_inputs, dec_inputs, global_step)
         total_loss += loss
         if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_print == 0:
-          LOG.info("Epoch: %d, batch: %d/%d, loss: %f", epoch, int(offset / FLAGS.batch_size) + 1,
-                   data_manager.get_trainset_size() / FLAGS.batch_size, total_loss / FLAGS.steps_per_print)
+          LOG.info("Epoch: %d, batch: %d/%d, PPL: %f", epoch, int(offset / FLAGS.batch_size) + 1,
+                   data_manager.get_trainset_size() / FLAGS.batch_size, np.exp(total_loss / FLAGS.steps_per_print))
           total_loss = 0
 
 
