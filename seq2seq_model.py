@@ -32,8 +32,8 @@ class Seq2SeqModel(object):
       self.setup_input_placeholders(seq_len)
       self.dec_labels = self.dec_inputs[1:]
 
-      _, enc_state = self.create_rnn_encoder(cell_size, stack_size, batch_size)
-      ret = self.create_rnn_decoder(enc_state, cell_size, stack_size)
+      hiddens, enc_state = self.create_rnn_encoder(cell_size, stack_size, batch_size)
+      ret = self.create_rnn_decoder(enc_state, cell_size, stack_size, hiddens=hiddens)
       self.dec_outputs = ret[:seq_len]
       self.inference_outputs = [tf.argmax(tf.matmul(o, self.output_projection[0]) + self.output_projection[1], axis=1)
                                 for o in self.dec_outputs]
@@ -91,21 +91,18 @@ class Seq2SeqModel(object):
         if i > 0:
           scope.reuse_variables()
         # [batch_size, 1] => [batch_size]
-        output, state = embedded_cell(self.enc_inputs[i], state)
-        outputs.append(output)
+        _, state = embedded_cell(self.enc_inputs[i], state)
+        outputs.append(state)
       return outputs, state
 
-  def create_rnn_decoder(self, encoder_state, cell_size, stack_size):
+  def create_rnn_decoder(self, encoder_state, cell_size, stack_size, hiddens=None):
     """
     Make up an RNN decoder.
 
     :param encoder_state: enoder_state
     :param cell_size:
     :param stack_size:
-    :param batch_size:
-    :param seq_len:
-    :param vocab_size:
-    :param embedding_size: embedding size.
+    :param hiddens:
     :return: outputs is a list of tensors which shape is [seq_len, embedding_size]. state's shape is [None, cell_size]
     """
     with tf.variable_scope("rnn_decoder") as scope:
@@ -139,6 +136,10 @@ class Seq2SeqModel(object):
     :param global_step:
     :return:
     """
+
+    if global_step == 10:
+      self.train_writer.add_graph(sess.graph)
+
     feed_dict = {self.for_inference.name: False,
                  self.enc_placeholder.name: enc_inputs,
                  self.dec_placeholder.name: dec_inputs}

@@ -11,15 +11,15 @@ LOG = logging.getLogger()
 
 
 class DataSet(object):
-  BOS_ID = 0
-  EOS_ID = 1
-  PAD_ID = 2
-  UNK_ID = 3
   BOS = "<BOS>"
   EOS = "<EOS>"
   PAD = "<PAD>"
   UNK = "<UNK>"
   predefined_words = [BOS, EOS, PAD, UNK]
+  BOS_ID = predefined_words.index(BOS)
+  EOS_ID = predefined_words.index(EOS)
+  PAD_ID = predefined_words.index(PAD)
+  UNK_ID = predefined_words.index(UNK)
 
   def get_words(self, corpus_path, out_dir):
     filename = os.path.basename(corpus_path)

@@ -43,6 +43,9 @@ def main(argv=None):
       LOG.info("Initializing a model...")
       sess.run(tf.global_variables_initializer())
 
+    LOG.info("Writing graphs...")
+    # tf.train.write_graph(sess.graph_def, "log", "train.pbtxt")
+
     LOG.info("Start training...")
     total_loss = 0
     global_step = 0
@@ -57,7 +60,7 @@ def main(argv=None):
           LOG.info("Epoch: %d, batch: %d/%d, PPL: %f", epoch, int(offset / FLAGS.batch_size) + 1,
                    data_manager.get_trainset_size() / FLAGS.batch_size, ppl)
           total_loss = 0
-        if (offset / FLAGS.batch_size + 1) % (100 * FLAGS.steps_per_print) == 0:
+        if (offset / FLAGS.batch_size + 1) % (20 * FLAGS.steps_per_print) == 0:
           save_path = saver.save(sess, "out/model.ckpt-%02d-%.3f" % (epoch, ppl), global_step)
           LOG.info("Model saved in the file: %s", save_path)
           inferences = model.inference(sess, enc_inputs, dec_inputs)
