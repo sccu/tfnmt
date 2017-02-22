@@ -58,7 +58,7 @@ class Seq2SeqModel(object):
 
       # write logs
       tf.summary.scalar("PPL", tf.exp(self.loss))
-      self.merged = tf.summary.merge_all()
+      self.summary_op = tf.summary.merge_all()
       self.train_writer = tf.summary.FileWriter("log/train")
       self.test_writer = tf.summary.FileWriter("log/test")
 
@@ -147,15 +147,13 @@ class Seq2SeqModel(object):
                  self.dec_placeholder.name: dec_inputs}
 
     if not trainable:
-      loss, summary = sess.run([self.loss, self.merged], feed_dict)
+      loss, summary = sess.run([self.loss, self.summary_op], feed_dict)
       self.test_writer.add_summary(summary, global_step)
       return loss
-    elif global_step % 10 == 0:
-      loss, _, summary = sess.run([self.loss, self.optim, self.merged], feed_dict)
+    else:
+      loss, _, summary = sess.run([self.loss, self.optim, self.summary_op], feed_dict)
       self.train_writer.add_summary(summary, global_step)
       return loss
-    else:
-      return sess.run([self.loss, self.optim], feed_dict)[0]
 
   def inference(self, sess, enc_inputs, dec_inputs):
     feed_dict = {self.for_inference.name: True,

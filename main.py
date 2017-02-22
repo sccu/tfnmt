@@ -56,33 +56,24 @@ def main(argv=None):
         loss = model.step(sess, enc_inputs, dec_inputs, global_step)
         total_loss += loss
         if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_print == 0:
-          ppl = np.exp(total_loss / FLAGS.steps_per_print)
-          LOG.info("Epoch: %d, batch: %d/%d, PPL: %f", epoch, int(offset / FLAGS.batch_size) + 1,
-                   data_manager.get_trainset_size() / FLAGS.batch_size, ppl)
           total_loss = 0
 
-        # cross-validation test and write checkpoint file.
-        if (offset / FLAGS.batch_size + 1) % (20 * FLAGS.steps_per_print) == 0:
-          cv_total_loss = 0
-          for cv_offset in range(0, data_manager.get_testset_size() - FLAGS.batch_size, FLAGS.batch_size):
-            enc_inputs, dec_inputs = data_manager.get_test_batch(cv_offset, FLAGS.batch_size)
-            loss = model.step(sess, enc_inputs, dec_inputs, global_step, trainable=False)
-            cv_total_loss += loss
+          cv_offset = offset % (data_manager.get_testset_size() - FLAGS.batch_size)
+          enc_inputs, dec_inputs = data_manager.get_test_batch(cv_offset, FLAGS.batch_size)
+          cv_loss = model.step(sess, enc_inputs, dec_inputs, global_step, trainable=False)
+          cv_ppl = np.exp(cv_loss)
 
-          cv_ppl = np.exp(cv_total_loss / (data_manager.get_testset_size() / FLAGS.batch_size))
-          LOG.info("### Cross Validation Result ###")
-          LOG.info("Epoch: %d, batch: %d/%d, CV_PPL: %f", epoch, int(cv_offset / FLAGS.batch_size) + 1,
-                   data_manager.get_trainset_size() / FLAGS.batch_size, cv_ppl)
+          # cross-validation test and write checkpoint file.
+          if (offset / FLAGS.batch_size + 1) % (20 * FLAGS.steps_per_print) == 0:
+            save_path = saver.save(sess, "out/model.ckpt-%02d-%.3f" % (epoch, cv_ppl), global_step)
+            LOG.info("Model saved in the file: %s", save_path)
+            inferences = model.inference(sess, enc_inputs, dec_inputs)
+            for i in range(5):
+              LOG.debug("  source: [%s]", data_manager.src_ids_to_str(enc_inputs[i]))
+              LOG.debug("  target: [%s]", data_manager.tgt_ids_to_str(dec_inputs[i]))
+              LOG.debug("  inference: [%s]", data_manager.tgt_ids_to_str(inferences[i]))
 
-          save_path = saver.save(sess, "out/model.ckpt-%02d-%.3f" % (epoch, cv_ppl), global_step)
-          LOG.info("Model saved in the file: %s", save_path)
-          inferences = model.inference(sess, enc_inputs, dec_inputs)
-          for i in range(5):
-            LOG.debug("  source: [%s]", data_manager.src_ids_to_str(enc_inputs[i]))
-            LOG.debug("  target: [%s]", data_manager.tgt_ids_to_str(dec_inputs[i]))
-            LOG.debug("  inference: [%s]", data_manager.tgt_ids_to_str(inferences[i]))
-
-    saver.save(sess, "out/model.ckpt-%02d-%.3f" % (epoch, ppl))
+    saver.save(sess, "out/model.ckpt-%02d" % epoch)
 
 
 if __name__ == "__main__":
