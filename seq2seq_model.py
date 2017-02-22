@@ -59,7 +59,8 @@ class Seq2SeqModel(object):
       # write logs
       tf.summary.scalar("PPL", tf.exp(self.loss))
       self.merged = tf.summary.merge_all()
-      self.train_writer = tf.summary.FileWriter("log")
+      self.train_writer = tf.summary.FileWriter("log/train")
+      self.test_writer = tf.summary.FileWriter("log/test")
 
   def setup_input_placeholders(self, seq_len):
     enc_inputs = tf.split(self.enc_placeholder, num_or_size_splits=seq_len, axis=1)
@@ -127,13 +128,14 @@ class Seq2SeqModel(object):
 
       return control_flow_ops.cond(self.for_inference, lambda: feeder(True), lambda: feeder(False))
 
-  def step(self, sess, enc_inputs, dec_inputs, global_step):
+  def step(self, sess, enc_inputs, dec_inputs, global_step, trainable=True):
     """
 
     :param sess:
     :param enc_inputs: [batch_size, seq_len] int32 array.
     :param dec_inputs: [batch_size, seq_len] int32 array.
     :param global_step:
+    :param trainable:
     :return:
     """
 
@@ -144,7 +146,11 @@ class Seq2SeqModel(object):
                  self.enc_placeholder.name: enc_inputs,
                  self.dec_placeholder.name: dec_inputs}
 
-    if global_step % 100 == 0:
+    if not trainable:
+      loss, summary = sess.run([self.loss, self.merged], feed_dict)
+      self.test_writer.add_summary(summary, global_step)
+      return loss
+    elif global_step % 10 == 0:
       loss, _, summary = sess.run([self.loss, self.optim, self.merged], feed_dict)
       self.train_writer.add_summary(summary, global_step)
       return loss

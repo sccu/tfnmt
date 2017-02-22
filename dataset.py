@@ -135,21 +135,6 @@ class DataSet(object):
 
     enc_inputs = []
     dec_inputs = []
-    for t in xrange(self.seq_len):
-      enc_inputs.append([])
-      dec_inputs.append([])
-      for b in xrange(batch_size):
-        enc_inputs[t].append(src[b][t] if t < len(src[b]) else self.PAD_ID)
-        dec_inputs[t].append(tgt[b][t] if t < len(tgt[b]) else self.PAD_ID)
-
-    return enc_inputs, dec_inputs
-
-  def get_batch2(self, offset, batch_size):
-    src = self.train_dataset[0][offset:offset + batch_size]
-    tgt = self.train_dataset[1][offset:offset + batch_size]
-
-    enc_inputs = []
-    dec_inputs = []
     for i in xrange(batch_size):
       enc_inputs.append(src[i] + [self.PAD_ID] * (self.seq_len - len(src[i])))
       dec_inputs.append(tgt[i] + [self.PAD_ID] * (self.seq_len - len(tgt[i])))
@@ -158,6 +143,9 @@ class DataSet(object):
 
   def get_trainset_size(self):
     return len(self.train_dataset[0])
+
+  def get_testset_size(self):
+    return len(self.test_dataset[0])
 
   def src_ids_to_words(self, ids):
     return [self.src_words[id] for id in ids]
@@ -170,3 +158,15 @@ class DataSet(object):
 
   def tgt_ids_to_str(self, ids):
     return " ".join([self.tgt_words[id] for id in ids if id not in [self.BOS_ID, self.EOS_ID, self.PAD_ID]])
+
+  def get_test_batch(self, offset, batch_size):
+    src = self.test_dataset[0][offset:offset + batch_size]
+    tgt = self.test_dataset[1][offset:offset + batch_size]
+
+    enc_inputs = []
+    dec_inputs = []
+    for i in xrange(batch_size):
+      enc_inputs.append(src[i] + [self.PAD_ID] * (self.seq_len - len(src[i])))
+      dec_inputs.append(tgt[i] + [self.PAD_ID] * (self.seq_len - len(tgt[i])))
+
+    return enc_inputs, dec_inputs

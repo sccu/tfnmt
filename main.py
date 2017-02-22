@@ -20,7 +20,7 @@ tf.app.flags.DEFINE_integer("seq_len", 10, "Maximum sequence length")
 tf.app.flags.DEFINE_integer("stack_size", 2, "RNN stack size")
 tf.app.flags.DEFINE_integer("embedding_size", 100, "Word embedding size")
 tf.app.flags.DEFINE_integer("vocab_size", 50000, "Vocab size")
-tf.app.flags.DEFINE_float("learning_rate", 0.01, "Learning rate")
+tf.app.flags.DEFINE_float("learning_rate", 0.005, "Learning rate")
 tf.app.flags.DEFINE_integer("steps_per_print", 10, "Steps per print")
 
 
@@ -52,7 +52,7 @@ def main(argv=None):
     for epoch in xrange(1, FLAGS.epochs + 1):
       for offset in range(0, data_manager.get_trainset_size() - FLAGS.batch_size, FLAGS.batch_size):
         global_step += 1
-        enc_inputs, dec_inputs = data_manager.get_batch2(offset, FLAGS.batch_size)
+        enc_inputs, dec_inputs = data_manager.get_batch(offset, FLAGS.batch_size)
         loss = model.step(sess, enc_inputs, dec_inputs, global_step)
         total_loss += loss
         if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_print == 0:
@@ -60,13 +60,27 @@ def main(argv=None):
           LOG.info("Epoch: %d, batch: %d/%d, PPL: %f", epoch, int(offset / FLAGS.batch_size) + 1,
                    data_manager.get_trainset_size() / FLAGS.batch_size, ppl)
           total_loss = 0
+
+        # cross-validation test and write checkpoint file.
         if (offset / FLAGS.batch_size + 1) % (20 * FLAGS.steps_per_print) == 0:
-          save_path = saver.save(sess, "out/model.ckpt-%02d-%.3f" % (epoch, ppl), global_step)
+          cv_total_loss = 0
+          for cv_offset in range(0, data_manager.get_testset_size() - FLAGS.batch_size, FLAGS.batch_size):
+            enc_inputs, dec_inputs = data_manager.get_test_batch(cv_offset, FLAGS.batch_size)
+            loss = model.step(sess, enc_inputs, dec_inputs, global_step, trainable=False)
+            cv_total_loss += loss
+
+          cv_ppl = np.exp(cv_total_loss / (data_manager.get_testset_size() / FLAGS.batch_size))
+          LOG.info("### Cross Validation Result ###")
+          LOG.info("Epoch: %d, batch: %d/%d, CV_PPL: %f", epoch, int(cv_offset / FLAGS.batch_size) + 1,
+                   data_manager.get_trainset_size() / FLAGS.batch_size, cv_ppl)
+
+          save_path = saver.save(sess, "out/model.ckpt-%02d-%.3f" % (epoch, cv_ppl), global_step)
           LOG.info("Model saved in the file: %s", save_path)
           inferences = model.inference(sess, enc_inputs, dec_inputs)
-          LOG.debug("  source: [%s]", data_manager.src_ids_to_str(enc_inputs[0]))
-          LOG.debug("  target: [%s]", data_manager.tgt_ids_to_str(dec_inputs[0]))
-          LOG.debug("  inference: [%s]", data_manager.tgt_ids_to_str(inferences[0]))
+          for i in range(5):
+            LOG.debug("  source: [%s]", data_manager.src_ids_to_str(enc_inputs[i]))
+            LOG.debug("  target: [%s]", data_manager.tgt_ids_to_str(dec_inputs[i]))
+            LOG.debug("  inference: [%s]", data_manager.tgt_ids_to_str(inferences[i]))
 
     saver.save(sess, "out/model.ckpt-%02d-%.3f" % (epoch, ppl))
 
