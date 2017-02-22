@@ -47,24 +47,30 @@ def main(argv=None):
     # tf.train.write_graph(sess.graph_def, "log", "train.pbtxt")
 
     LOG.info("Start training...")
-    total_loss = 0
+    total_loss = []
+    cv_total_loss = []
     global_step = 0
     for epoch in xrange(1, FLAGS.epochs + 1):
       for offset in range(0, data_manager.get_trainset_size() - FLAGS.batch_size, FLAGS.batch_size):
         global_step += 1
         enc_inputs, dec_inputs = data_manager.get_batch(offset, FLAGS.batch_size)
         loss = model.step(sess, enc_inputs, dec_inputs, global_step)
-        total_loss += loss
+        total_loss.append(loss)
         if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_print == 0:
-          total_loss = 0
+          ppl = np.exp(np.average(total_loss))
+          total_loss = []
+          LOG.info("Epoch: %d, batch: %d/%d, PPL: %f", epoch, int(offset / FLAGS.batch_size) + 1,
+                   data_manager.get_trainset_size() / FLAGS.batch_size, ppl)
 
           cv_offset = offset % (data_manager.get_testset_size() - FLAGS.batch_size)
           enc_inputs, dec_inputs = data_manager.get_test_batch(cv_offset, FLAGS.batch_size)
           cv_loss = model.step(sess, enc_inputs, dec_inputs, global_step, trainable=False)
-          cv_ppl = np.exp(cv_loss)
+          cv_total_loss.append(cv_loss)
 
           # cross-validation test and write checkpoint file.
           if (offset / FLAGS.batch_size + 1) % (20 * FLAGS.steps_per_print) == 0:
+            cv_ppl = np.exp(np.average(cv_total_loss))
+            cv_total_loss = []
             save_path = saver.save(sess, "out/model.ckpt-%02d-%.3f" % (epoch, cv_ppl), global_step)
             LOG.info("Model saved in the file: %s", save_path)
             inferences = model.inference(sess, enc_inputs, dec_inputs)
