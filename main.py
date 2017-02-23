@@ -17,11 +17,11 @@ tf.app.flags.DEFINE_integer("batch_size", 8, "Batch size")
 tf.app.flags.DEFINE_integer("max_data_size", 100000, "Maximum data size")
 tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs")
 tf.app.flags.DEFINE_integer("cell_size", 500, "LSTM cell size")
-tf.app.flags.DEFINE_integer("seq_len", 10, "Maximum sequence length")
+tf.app.flags.DEFINE_integer("seq_len", 15, "Maximum sequence length")
 tf.app.flags.DEFINE_integer("stack_size", 1, "RNN stack size")
 tf.app.flags.DEFINE_integer("embedding_size", 100, "Word embedding size")
 tf.app.flags.DEFINE_integer("vocab_size", 50000, "Vocab size")
-tf.app.flags.DEFINE_float("learning_rate", 0.005, "Learning rate")
+tf.app.flags.DEFINE_float("learning_rate", 0.01, "Learning rate")
 tf.app.flags.DEFINE_integer("steps_per_print", 10, "Steps per print")
 
 
@@ -31,13 +31,13 @@ def main(argv=None):
                          FLAGS.seq_len, FLAGS.vocab_size,
                          max_data_size=FLAGS.max_data_size)
 
-  LOG.info("Building model...")
-  model = Seq2SeqModel(FLAGS.cell_size, FLAGS.stack_size, FLAGS.batch_size,
-                       FLAGS.seq_len, FLAGS.vocab_size, FLAGS.embedding_size,
-                       FLAGS.learning_rate)
-  saver = tf.train.Saver()
-
   with tf.Session() as sess:
+    LOG.info("Building model...")
+    model = Seq2SeqModel(sess, FLAGS.cell_size, FLAGS.stack_size,
+                         FLAGS.batch_size, FLAGS.seq_len, FLAGS.vocab_size,
+                         FLAGS.embedding_size, FLAGS.learning_rate)
+    saver = tf.train.Saver()
+
     ckpt = tf.train.get_checkpoint_state("out")
     if ckpt and ckpt.model_checkpoint_path:
       LOG.info("Restoring a model from: %s", ckpt.model_checkpoint_path)

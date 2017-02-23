@@ -8,8 +8,9 @@ LOG = logging.getLogger()
 
 
 class Seq2SeqModel(object):
-  def __init__(self, cell_size, stack_size, batch_size, seq_len, vocab_size,
-               embedding_size, learning_rate):
+  def __init__(self, sess, cell_size, stack_size, batch_size, seq_len,
+               vocab_size,
+               embedding_size, learning_rate, max_gradient_norm=5.0):
     self.BOS_ID = 0
     self.PAD_ID = 2
     self.seq_len = seq_len
@@ -62,14 +63,20 @@ class Seq2SeqModel(object):
 
       self.loss = self.sequence_loss(self.dec_outputs, self.dec_labels,
                                      softmax_loss_function=sampled_loss)
-      self.optim = tf.train.GradientDescentOptimizer(
-        self.learning_rate).minimize(self.loss)
+      # Gradients and SGD update operation for training the model
+      optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
+      params = tf.trainable_variables()
+      gradients = tf.gradients(self.loss, params)
+      clipped_gradients, norm = tf.clip_by_global_norm(gradients,
+                                                       max_gradient_norm)
+      self.update_op = optimizer.apply_gradients(zip(clipped_gradients, params))
 
       # write logs
       tf.summary.scalar("PPL", tf.exp(self.loss))
       self.summary_op = tf.summary.merge_all()
-      self.train_writer = tf.summary.FileWriter("log/train")
-      self.test_writer = tf.summary.FileWriter("log/test")
+      self.train_writer = tf.summary.FileWriter("log/train",
+                                                graph=sess.graph_def)
+      self.test_writer = tf.summary.FileWriter("log/test", graph=sess.graph_def)
 
   def setup_input_placeholders(self, seq_len):
     enc_inputs = tf.split(self.enc_placeholder, num_or_size_splits=seq_len,
@@ -121,9 +128,10 @@ class Seq2SeqModel(object):
     :return: outputs is a list of tensors which shape is [seq_len, embedding_size]. state's shape is [None, cell_size]
     """
     with tf.variable_scope("rnn_decoder") as scope:
-      lstm = core_rnn_cell.BasicLSTMCell(cell_size)
-      stacked_lstm = core_rnn_cell.MultiRNNCell([lstm] * stack_size)
-      embedded_cell = core_rnn_cell.EmbeddingWrapper(stacked_lstm,
+      cell = core_rnn_cell.BasicLSTMCell(cell_size)
+      if stack_size > 1:
+        cell = core_rnn_cell.MultiRNNCell([cell] * stack_size)
+      embedded_cell = core_rnn_cell.EmbeddingWrapper(cell,
                                                      self.vocab_size,
                                                      self.embedding_size)
 
@@ -165,15 +173,14 @@ class Seq2SeqModel(object):
                  self.enc_placeholder.name: enc_inputs,
                  self.dec_placeholder.name: dec_inputs}
 
-    if not trainable:
-      loss, summary = sess.run([self.loss, self.summary_op], feed_dict)
-      self.test_writer.add_summary(summary, global_step)
-      return loss
-    else:
-      loss, _, summary = sess.run([self.loss, self.optim, self.summary_op],
+    if trainable:
+      loss, _, summary = sess.run([self.loss, self.update_op, self.summary_op],
                                   feed_dict)
       self.train_writer.add_summary(summary, global_step)
-      return loss
+    else:
+      loss, summary = sess.run([self.loss, self.summary_op], feed_dict)
+      self.test_writer.add_summary(summary, global_step)
+    return loss
 
   def inference(self, sess, enc_inputs, dec_inputs):
     feed_dict = {self.for_inference.name: True,
