@@ -23,6 +23,7 @@ tf.app.flags.DEFINE_integer("embedding_size", 100, "Word embedding size")
 tf.app.flags.DEFINE_integer("vocab_size", 50000, "Vocab size")
 tf.app.flags.DEFINE_float("learning_rate", 0.01, "Learning rate")
 tf.app.flags.DEFINE_integer("steps_per_print", 10, "Steps per print")
+tf.app.flags.DEFINE_integer("steps_per_save", 200, "Steps per save")
 
 
 def main(argv=None):
@@ -50,8 +51,9 @@ def main(argv=None):
     # tf.train.write_graph(sess.graph_def, "log", "train.pbtxt")
 
     LOG.info("Start training...")
-    total_loss = []
-    cv_total_loss = []
+    losses = []
+    cv_losses = []
+    cv_ppl_history = []
     global_step = 0
     for epoch in xrange(1, FLAGS.epochs + 1):
       for offset in range(0,
@@ -61,13 +63,14 @@ def main(argv=None):
         enc_inputs, dec_inputs = data_manager.get_batch(offset,
                                                         FLAGS.batch_size)
         loss = model.step(sess, enc_inputs, dec_inputs, global_step)
-        total_loss.append(loss)
+        losses.append(loss)
         if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_print == 0:
-          ppl = np.exp(np.average(total_loss))
-          total_loss = []
-          LOG.info("Epoch: %d, batch: %d/%d, PPL: %f", epoch,
+          ppl = np.exp(np.average(losses))
+          losses = []
+          LOG.info("Epoch: %d, batch: %d/%d, PPL: %f, LR: %f", epoch,
                    int(offset / FLAGS.batch_size) + 1,
-                   data_manager.get_trainset_size() / FLAGS.batch_size, ppl)
+                   data_manager.get_trainset_size() / FLAGS.batch_size, ppl,
+                   model.learning_rate.eval())
 
           cv_offset = offset % (
             data_manager.get_testset_size() - FLAGS.batch_size)
@@ -75,25 +78,30 @@ def main(argv=None):
                                                                FLAGS.batch_size)
           cv_loss = model.step(sess, enc_inputs, dec_inputs, global_step,
                                trainable=False)
-          cv_total_loss.append(cv_loss)
+          cv_losses.append(cv_loss)
 
-          # cross-validation test and write checkpoint file.
-          if (offset / FLAGS.batch_size + 1) % (
-                20 * FLAGS.steps_per_print) == 0:
-            cv_ppl = np.exp(np.average(cv_total_loss))
-            cv_total_loss = []
-            save_path = saver.save(sess,
-                                   "out/model.ckpt-%02d-%.3f" % (epoch, cv_ppl),
-                                   global_step)
-            LOG.info("Model saved in the file: %s", save_path)
-            inferences = model.inference(sess, enc_inputs, dec_inputs)
-            for i in range(5):
-              LOG.debug("  source: [%s]",
-                        data_manager.src_ids_to_str(enc_inputs[i]))
-              LOG.debug("  target: [%s]",
-                        data_manager.tgt_ids_to_str(dec_inputs[i]))
-              LOG.debug("  inference: [%s]",
-                        data_manager.tgt_ids_to_str(inferences[i]))
+        # cross-validation test and write checkpoint file.
+        if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_save == 0:
+          cv_ppl = np.exp(np.average(cv_losses))
+          cv_losses = []
+          save_path = saver.save(sess,
+                                 "out/model.ckpt-%02d-%.3f" % (epoch, cv_ppl),
+                                 global_step)
+          LOG.info("Model saved in the file: %s", save_path)
+          inferences = model.inference(sess, enc_inputs, dec_inputs)
+          for i in range(5):
+            LOG.debug("  source: [%s]",
+                      data_manager.src_ids_to_str(enc_inputs[i]))
+            LOG.debug("  target: [%s]",
+                      data_manager.tgt_ids_to_str(dec_inputs[i]))
+            LOG.debug("  inference: [%s]",
+                      data_manager.tgt_ids_to_str(inferences[i]))
+
+          # decaying learning rate
+          if len(cv_ppl_history) > 2 and cv_ppl > max(cv_ppl_history):
+            sess.run(model.learning_rate_decaying_op)
+            cv_ppl_history.pop(0)
+          cv_ppl_history.append(cv_ppl)
 
     saver.save(sess, "out/model.ckpt-%02d" % epoch)
 

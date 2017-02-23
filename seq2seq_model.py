@@ -9,14 +9,16 @@ LOG = logging.getLogger()
 
 class Seq2SeqModel(object):
   def __init__(self, sess, cell_size, stack_size, batch_size, seq_len,
-               vocab_size,
-               embedding_size, learning_rate, max_gradient_norm=5.0):
+               vocab_size, embedding_size, learning_rate,
+               learning_rate_decaying_factor=0.99, max_gradient_norm=5.0):
     self.BOS_ID = 0
     self.PAD_ID = 2
     self.seq_len = seq_len
     self.vocab_size = vocab_size
     self.embedding_size = embedding_size
-    self.learning_rate = learning_rate
+    self.learning_rate = tf.Variable(learning_rate, trainable=False)
+    self.learning_rate_decaying_op = self.learning_rate.assign(
+      self.learning_rate * learning_rate_decaying_factor)
 
     num_samples = 512
 
