@@ -8,7 +8,8 @@ LOG = logging.getLogger()
 
 
 class Seq2SeqModel(object):
-  def __init__(self, cell_size, stack_size, batch_size, seq_len, vocab_size, embedding_size, learning_rate):
+  def __init__(self, cell_size, stack_size, batch_size, seq_len, vocab_size,
+               embedding_size, learning_rate):
     self.BOS_ID = 0
     self.PAD_ID = 2
     self.seq_len = seq_len
@@ -25,18 +26,23 @@ class Seq2SeqModel(object):
       self.output_projection = (w, b)
 
       self.for_inference = tf.placeholder(tf.bool)
-      self.dec_placeholder = tf.placeholder(tf.int32, [batch_size, seq_len], "dec_inputs")
-      self.enc_placeholder = tf.placeholder(tf.int32, [batch_size, seq_len], "enc_inputs")
+      self.dec_placeholder = tf.placeholder(tf.int32, [batch_size, seq_len],
+                                            "dec_inputs")
+      self.enc_placeholder = tf.placeholder(tf.int32, [batch_size, seq_len],
+                                            "enc_inputs")
       self.enc_inputs = []
       self.dec_inputs = []
       self.setup_input_placeholders(seq_len)
       self.dec_labels = self.dec_inputs[1:]
 
-      hiddens, enc_state = self.create_rnn_encoder(cell_size, stack_size, batch_size)
-      ret = self.create_rnn_decoder(enc_state, cell_size, stack_size, hiddens=hiddens)
+      hiddens, enc_state = self.create_rnn_encoder(cell_size, stack_size,
+                                                   batch_size)
+      ret = self.create_rnn_decoder(enc_state, cell_size, stack_size,
+                                    hiddens=hiddens)
       self.dec_outputs = ret[:seq_len]
-      self.inference_outputs = [tf.argmax(tf.matmul(o, self.output_projection[0]) + self.output_projection[1], axis=1)
-                                for o in self.dec_outputs]
+      self.inference_outputs = [tf.argmax(
+        tf.matmul(o, self.output_projection[0]) + self.output_projection[1],
+        axis=1) for o in self.dec_outputs]
       self.inference_outputs = tf.transpose(self.inference_outputs)
       dec_state = ret[seq_len:]
 
@@ -50,11 +56,14 @@ class Seq2SeqModel(object):
         local_b = tf.cast(b, tf.float32)
         local_inputs = tf.cast(inputs, tf.float32)
         return tf.cast(
-          tf.nn.sampled_softmax_loss(local_w_t, local_b, labels, local_inputs, num_samples, vocab_size),
+          tf.nn.sampled_softmax_loss(local_w_t, local_b, labels, local_inputs,
+                                     num_samples, vocab_size),
           dtype=tf.float32)
 
-      self.loss = self.sequence_loss(self.dec_outputs, self.dec_labels, softmax_loss_function=sampled_loss)
-      self.optim = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
+      self.loss = self.sequence_loss(self.dec_outputs, self.dec_labels,
+                                     softmax_loss_function=sampled_loss)
+      self.optim = tf.train.GradientDescentOptimizer(
+        self.learning_rate).minimize(self.loss)
 
       # write logs
       tf.summary.scalar("PPL", tf.exp(self.loss))
@@ -63,8 +72,10 @@ class Seq2SeqModel(object):
       self.test_writer = tf.summary.FileWriter("log/test")
 
   def setup_input_placeholders(self, seq_len):
-    enc_inputs = tf.split(self.enc_placeholder, num_or_size_splits=seq_len, axis=1)
-    dec_inputs = tf.split(self.dec_placeholder, num_or_size_splits=seq_len, axis=1)
+    enc_inputs = tf.split(self.enc_placeholder, num_or_size_splits=seq_len,
+                          axis=1)
+    dec_inputs = tf.split(self.dec_placeholder, num_or_size_splits=seq_len,
+                          axis=1)
     for i in xrange(seq_len):
       self.enc_inputs.append(tf.reshape(enc_inputs[i], [-1]))
       self.dec_inputs.append(tf.reshape(dec_inputs[i], [-1]))
@@ -81,9 +92,11 @@ class Seq2SeqModel(object):
 
   def create_rnn_encoder(self, cell_size, stack_size, batch_size):
     with tf.variable_scope("rnn_encoder") as scope:
-      lstm = core_rnn_cell.BasicLSTMCell(cell_size)
-      stacked_lstm = core_rnn_cell.MultiRNNCell([lstm] * stack_size)
-      embedded_cell = core_rnn_cell.EmbeddingWrapper(stacked_lstm, self.vocab_size, self.embedding_size)
+      cell = core_rnn_cell.BasicLSTMCell(cell_size)
+      if stack_size > 1:
+        cell = core_rnn_cell.MultiRNNCell([cell] * stack_size)
+      embedded_cell = core_rnn_cell.EmbeddingWrapper(cell, self.vocab_size,
+                                                     self.embedding_size)
 
       # [batch_size, seq_len] => list of [batch_size, 1]
       state = embedded_cell.zero_state(batch_size, tf.float32)
@@ -96,7 +109,8 @@ class Seq2SeqModel(object):
         outputs.append(state)
       return outputs, state
 
-  def create_rnn_decoder(self, encoder_state, cell_size, stack_size, hiddens=None):
+  def create_rnn_decoder(self, encoder_state, cell_size, stack_size,
+                         hiddens=None):
     """
     Make up an RNN decoder.
 
@@ -109,7 +123,9 @@ class Seq2SeqModel(object):
     with tf.variable_scope("rnn_decoder") as scope:
       lstm = core_rnn_cell.BasicLSTMCell(cell_size)
       stacked_lstm = core_rnn_cell.MultiRNNCell([lstm] * stack_size)
-      embedded_cell = core_rnn_cell.EmbeddingWrapper(stacked_lstm, self.vocab_size, self.embedding_size)
+      embedded_cell = core_rnn_cell.EmbeddingWrapper(stacked_lstm,
+                                                     self.vocab_size,
+                                                     self.embedding_size)
 
       def feeder(for_inference=False):
         state = encoder_state
@@ -118,7 +134,9 @@ class Seq2SeqModel(object):
           if i > 0:
             scope.reuse_variables()
           if for_inference and i > 0:
-            next_input = tf.argmax(tf.matmul(emb_output, self.output_projection[0]) + self.output_projection[1], axis=1)
+            next_input = tf.argmax(
+              tf.matmul(emb_output, self.output_projection[0]) +
+              self.output_projection[1], axis=1)
           else:
             next_input = tf.reshape(self.dec_inputs[i], [-1])
           emb_output, state = embedded_cell(next_input, state)
@@ -126,7 +144,8 @@ class Seq2SeqModel(object):
         state_list = nest.flatten(state)
         return emb_outputs + state_list
 
-      return control_flow_ops.cond(self.for_inference, lambda: feeder(True), lambda: feeder(False))
+      return control_flow_ops.cond(self.for_inference, lambda: feeder(True),
+                                   lambda: feeder(False))
 
   def step(self, sess, enc_inputs, dec_inputs, global_step, trainable=True):
     """
@@ -151,7 +170,8 @@ class Seq2SeqModel(object):
       self.test_writer.add_summary(summary, global_step)
       return loss
     else:
-      loss, _, summary = sess.run([self.loss, self.optim, self.summary_op], feed_dict)
+      loss, _, summary = sess.run([self.loss, self.optim, self.summary_op],
+                                  feed_dict)
       self.train_writer.add_summary(summary, global_step)
       return loss
 
