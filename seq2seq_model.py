@@ -74,9 +74,8 @@ class Seq2SeqModel(object):
       # write logs
       tf.summary.scalar("PPL", tf.exp(self.loss))
       self.summary_op = tf.summary.merge_all()
-      self.train_writer = tf.summary.FileWriter("log/train",
-                                                graph=sess.graph_def)
-      self.test_writer = tf.summary.FileWriter("log/test", graph=sess.graph_def)
+      self.train_writer = tf.summary.FileWriter("log/train", graph=sess.graph)
+      self.test_writer = tf.summary.FileWriter("log/test", graph=sess.graph)
 
   def setup_input_placeholders(self, seq_len):
     enc_inputs = tf.split(self.enc_placeholder, num_or_size_splits=seq_len,
