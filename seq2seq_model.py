@@ -7,6 +7,15 @@ from tensorflow.python.util import nest
 LOG = logging.getLogger()
 
 
+def align(ht, hs):
+  pass
+
+
+def attentional_hidden_state(hiddens, ht):
+  aligns = [align(ht, hs) for hs in hiddens]
+  return ht
+
+
 class Seq2SeqModel(object):
   def __init__(self, sess, cell_size, stack_size, batch_size, seq_len,
                vocab_size, embedding_size, learning_rate,
@@ -91,11 +100,13 @@ class Seq2SeqModel(object):
   def sequence_loss(self, logits, labels, softmax_loss_function):
     with tf.variable_scope("loss") as scope:
       losses = []
+      weights = []
       for logit, label in zip(logits, labels):
         weight = tf.cast(tf.not_equal(label, self.PAD_ID), tf.float32)
         cross_entropy = softmax_loss_function(logit, label)
         losses.append(cross_entropy * weight)
-      log_ppl = tf.reduce_mean(tf.add_n(losses) / len(labels))
+        weights.append(weight)
+      log_ppl = tf.reduce_sum(tf.add_n(losses) / tf.reduce_sum(weights))
       return log_ppl
 
   def create_rnn_encoder(self, cell_size, stack_size, batch_size):
@@ -138,7 +149,7 @@ class Seq2SeqModel(object):
 
       def feeder(for_inference=False):
         state = encoder_state
-        emb_outputs = []
+        outputs = []
         for i in xrange(self.seq_len):
           if i > 0:
             scope.reuse_variables()
@@ -149,9 +160,13 @@ class Seq2SeqModel(object):
           else:
             next_input = tf.reshape(self.dec_inputs[i], [-1])
           emb_output, state = embedded_cell(next_input, state)
-          emb_outputs.append(emb_output)
+          if hiddens:
+            output = attentional_hidden_state(hiddens, emb_output)
+          else:
+            output = emb_output
+          outputs.append(output)
         state_list = nest.flatten(state)
-        return emb_outputs + state_list
+        return outputs + state_list
 
       return control_flow_ops.cond(self.for_inference, lambda: feeder(True),
                                    lambda: feeder(False))
@@ -183,7 +198,7 @@ class Seq2SeqModel(object):
       self.test_writer.add_summary(summary, global_step)
     return loss
 
-  def inference(self, sess, enc_inputs, dec_inputs):
+  def predict(self, sess, enc_inputs, dec_inputs):
     feed_dict = {self.for_inference.name: True,
                  self.enc_placeholder.name: enc_inputs,
                  self.dec_placeholder.name: dec_inputs}

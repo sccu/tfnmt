@@ -21,7 +21,7 @@ tf.app.flags.DEFINE_integer("seq_len", 15, "Maximum sequence length")
 tf.app.flags.DEFINE_integer("stack_size", 1, "RNN stack size")
 tf.app.flags.DEFINE_integer("embedding_size", 100, "Word embedding size")
 tf.app.flags.DEFINE_integer("vocab_size", 50000, "Vocab size")
-tf.app.flags.DEFINE_float("learning_rate", 0.01, "Learning rate")
+tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate")
 tf.app.flags.DEFINE_integer("steps_per_print", 10, "Steps per print")
 tf.app.flags.DEFINE_integer("steps_per_save", 200, "Steps per save")
 
@@ -88,14 +88,14 @@ def main(argv=None):
                                  "out/model.ckpt-%02d-%.3f" % (epoch, cv_ppl),
                                  global_step)
           LOG.info("Model saved in the file: %s", save_path)
-          inferences = model.inference(sess, enc_inputs, dec_inputs)
+          translations = model.predict(sess, enc_inputs, dec_inputs)
           for i in range(5):
             LOG.debug("  source: [%s]",
                       data_manager.src_ids_to_str(enc_inputs[i]))
             LOG.debug("  target: [%s]",
                       data_manager.tgt_ids_to_str(dec_inputs[i]))
-            LOG.debug("  inference: [%s]",
-                      data_manager.tgt_ids_to_str(inferences[i]))
+            LOG.debug("  translation: [%s]",
+                      data_manager.tgt_ids_to_str(translations[i]))
 
           # decaying learning rate
           if len(cv_ppl_history) > 2 and cv_ppl > max(cv_ppl_history):

@@ -170,7 +170,7 @@ class DataSet(object):
 
   def tgt_ids_to_str(self, ids):
     return " ".join([self.tgt_words[id] for id in ids if
-                     id not in [self.BOS_ID, self.EOS_ID, self.PAD_ID]])
+                     id not in [self.BOS_ID, self.PAD_ID]])
 
   def get_test_batch(self, offset, batch_size):
     src = self.test_dataset[0][offset:offset + batch_size]
