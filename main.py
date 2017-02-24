@@ -13,7 +13,7 @@ LOG = logging.getLogger()
 logging.basicConfig(format="%(asctime)s %(levelname)-8s %(message)s",
                     level=logging.DEBUG)
 
-tf.app.flags.DEFINE_integer("batch_size", 8, "Batch size")
+tf.app.flags.DEFINE_integer("batch_size", 4, "Batch size")
 tf.app.flags.DEFINE_integer("max_data_size", 100000, "Maximum data size")
 tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs")
 tf.app.flags.DEFINE_integer("cell_size", 500, "LSTM cell size")
@@ -21,9 +21,9 @@ tf.app.flags.DEFINE_integer("seq_len", 15, "Maximum sequence length")
 tf.app.flags.DEFINE_integer("stack_size", 1, "RNN stack size")
 tf.app.flags.DEFINE_integer("embedding_size", 100, "Word embedding size")
 tf.app.flags.DEFINE_integer("vocab_size", 50000, "Vocab size")
-tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate")
+tf.app.flags.DEFINE_float("learning_rate", 1.0, "Learning rate")
 tf.app.flags.DEFINE_integer("steps_per_print", 10, "Steps per print")
-tf.app.flags.DEFINE_integer("steps_per_save", 200, "Steps per save")
+tf.app.flags.DEFINE_integer("steps_per_save", 100, "Steps per save")
 
 
 def main(argv=None):
@@ -88,7 +88,7 @@ def main(argv=None):
                                  "out/model.ckpt-%02d-%.3f" % (epoch, cv_ppl),
                                  global_step)
           LOG.info("Model saved in the file: %s", save_path)
-          translations = model.predict(sess, enc_inputs, dec_inputs)
+          translations = model.predict(sess, enc_inputs, dec_inputs).tolist()
           for i in range(5):
             LOG.debug("  source: [%s]",
                       data_manager.src_ids_to_str(enc_inputs[i]))
