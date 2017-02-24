@@ -89,7 +89,7 @@ def main(argv=None):
                                  global_step)
           LOG.info("Model saved in the file: %s", save_path)
           translations = model.predict(sess, enc_inputs, dec_inputs).tolist()
-          for i in range(5):
+          for i in range(min(5, FLAGS.batch_size)):
             LOG.debug("  source: [%s]",
                       data_manager.src_ids_to_str(enc_inputs[i]))
             LOG.debug("  target: [%s]",

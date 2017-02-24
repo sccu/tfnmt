@@ -25,6 +25,7 @@ class Seq2SeqModel(object):
     self.seq_len = seq_len
     self.vocab_size = vocab_size
     self.embedding_size = embedding_size
+    self.output_keep_prob_op = tf.placeholder(tf.float32)
     self.learning_rate = tf.Variable(learning_rate, trainable=False)
     self.learning_rate_decaying_op = self.learning_rate.assign(
       self.learning_rate * learning_rate_decaying_factor)
@@ -112,6 +113,8 @@ class Seq2SeqModel(object):
   def create_rnn_encoder(self, cell_size, stack_size, batch_size):
     with tf.variable_scope("rnn_encoder") as scope:
       cell = core_rnn_cell.BasicLSTMCell(cell_size)
+      cell = core_rnn_cell.DropoutWrapper(cell,
+                                          output_keep_prob=self.output_keep_prob_op)
       if stack_size > 1:
         cell = core_rnn_cell.MultiRNNCell([cell] * stack_size)
       embedded_cell = core_rnn_cell.EmbeddingWrapper(cell, self.vocab_size,
@@ -141,6 +144,8 @@ class Seq2SeqModel(object):
     """
     with tf.variable_scope("rnn_decoder") as scope:
       cell = core_rnn_cell.BasicLSTMCell(cell_size)
+      cell = core_rnn_cell.DropoutWrapper(cell,
+                                          output_keep_prob=self.output_keep_prob_op)
       if stack_size > 1:
         cell = core_rnn_cell.MultiRNNCell([cell] * stack_size)
       embedded_cell = core_rnn_cell.EmbeddingWrapper(cell,
@@ -186,6 +191,7 @@ class Seq2SeqModel(object):
       self.train_writer.add_graph(sess.graph)
 
     feed_dict = {self.for_inference.name: False,
+                 self.output_keep_prob_op: 0.7 if trainable else 1.0,
                  self.enc_placeholder.name: enc_inputs,
                  self.dec_placeholder.name: dec_inputs}
 
@@ -200,6 +206,7 @@ class Seq2SeqModel(object):
 
   def predict(self, sess, enc_inputs, dec_inputs):
     feed_dict = {self.for_inference.name: True,
+                 self.output_keep_prob_op: 1.0,
                  self.enc_placeholder.name: enc_inputs,
                  self.dec_placeholder.name: dec_inputs}
     ret = sess.run(self.inference_outputs, feed_dict)
