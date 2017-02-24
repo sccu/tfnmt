@@ -19,7 +19,7 @@ def attentional_hidden_state(hiddens, ht):
 class Seq2SeqModel(object):
   def __init__(self, sess, cell_size, stack_size, batch_size, seq_len,
                vocab_size, embedding_size, learning_rate,
-               learning_rate_decaying_factor=0.99, max_gradient_norm=5.0):
+               learning_rate_decaying_factor=0.9, max_gradient_norm=5.0):
     self.BOS_ID = 0
     self.PAD_ID = 2
     self.seq_len = seq_len
