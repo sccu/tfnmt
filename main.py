@@ -13,17 +13,18 @@ LOG = logging.getLogger()
 logging.basicConfig(format="%(asctime)s %(levelname)-8s %(message)s",
                     level=logging.DEBUG)
 
-tf.app.flags.DEFINE_integer("batch_size", 4, "Batch size")
-tf.app.flags.DEFINE_integer("max_data_size", 100000, "Maximum data size")
+tf.app.flags.DEFINE_integer("batch_size", 64, "Batch size")
+tf.app.flags.DEFINE_integer("max_data_size", 1000000, "Maximum data size")
 tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs")
-tf.app.flags.DEFINE_integer("cell_size", 500, "LSTM cell size")
-tf.app.flags.DEFINE_integer("seq_len", 15, "Maximum sequence length")
-tf.app.flags.DEFINE_integer("stack_size", 1, "RNN stack size")
-tf.app.flags.DEFINE_integer("embedding_size", 100, "Word embedding size")
+tf.app.flags.DEFINE_integer("cell_size", 600, "LSTM cell size")
+tf.app.flags.DEFINE_integer("seq_len", 30, "Maximum sequence length")
+tf.app.flags.DEFINE_integer("stack_size", 2, "RNN stack size")
+tf.app.flags.DEFINE_integer("embedding_size", 200, "Word embedding size")
 tf.app.flags.DEFINE_integer("vocab_size", 50000, "Vocab size")
 tf.app.flags.DEFINE_float("learning_rate", 1.0, "Learning rate")
 tf.app.flags.DEFINE_integer("steps_per_print", 10, "Steps per print")
-tf.app.flags.DEFINE_integer("steps_per_save", 100, "Steps per save")
+tf.app.flags.DEFINE_integer("steps_per_save", 200, "Steps per save")
+tf.app.flags.DEFINE_float("dropout", 0.3, "Dropout")
 
 
 def main(argv=None):
@@ -36,7 +37,8 @@ def main(argv=None):
     LOG.info("Building model...")
     model = Seq2SeqModel(sess, FLAGS.cell_size, FLAGS.stack_size,
                          FLAGS.batch_size, FLAGS.seq_len, FLAGS.vocab_size,
-                         FLAGS.embedding_size, FLAGS.learning_rate)
+                         FLAGS.embedding_size, FLAGS.learning_rate,
+                         dropout=FLAGS.dropout)
     saver = tf.train.Saver()
 
     ckpt = tf.train.get_checkpoint_state("out")
@@ -98,9 +100,8 @@ def main(argv=None):
                       data_manager.tgt_ids_to_str(translations[i]))
 
           # decaying learning rate
-          if len(cv_ppl_history) > 2 and cv_ppl > max(cv_ppl_history):
+          if len(cv_ppl_history) > 2 and cv_ppl > max(cv_ppl_history[-3:]):
             sess.run(model.learning_rate_decaying_op)
-            cv_ppl_history.pop(0)
           cv_ppl_history.append(cv_ppl)
 
     saver.save(sess, "out/model.ckpt-%02d" % epoch)
