@@ -11,9 +11,26 @@ def align(ht, hs):
   pass
 
 
-def attentional_hidden_state(hiddens, ht):
-  aligns = [align(ht, hs) for hs in hiddens]
-  return ht
+def score(ht, hs):
+  # dot product
+  return ht * hs
+
+
+def attentional_hidden_state(ht, hiddens):
+  with tf.variable_scope("attn"):
+    batch_size = ht.get_shape()[0].value
+    cell_size = ht.get_shape()[1].value
+    attn_Wc = tf.get_variable("attn_Wc", [2 * cell_size, cell_size], tf.float32)
+    attn_b = tf.get_variable("attn_b", [cell_size], tf.float32)
+
+    scores = [score(ht, hs) for hs in hiddens]
+    exps = [tf.exp(s) for s in scores]
+    denom = tf.add_n(exps)
+    aligns = [exp / denom for exp in exps]
+    context = tf.add_n([a * hs for a, hs, in zip(aligns, hiddens)])
+    concat = tf.concat([context, ht], axis=1)
+    attentional_ht = tf.tanh(tf.matmul(concat, attn_Wc) + attn_b)
+    return attentional_ht
 
 
 class Seq2SeqModel(object):
@@ -23,6 +40,7 @@ class Seq2SeqModel(object):
                dropout=0.3):
     self.BOS_ID = 0
     self.PAD_ID = 2
+    self.cell_size = cell_size
     self.seq_len = seq_len
     self.vocab_size = vocab_size
     self.embedding_size = embedding_size
@@ -117,7 +135,7 @@ class Seq2SeqModel(object):
       cell = core_rnn_cell.BasicLSTMCell(cell_size)
       if self.dropout != 0.0:
         cell = core_rnn_cell.DropoutWrapper(cell,
-                                            output_keep_prob=1-self.dropout_op)
+                                            output_keep_prob=1 - self.dropout_op)
       if stack_size > 1:
         cell = core_rnn_cell.MultiRNNCell([cell] * stack_size)
       embedded_cell = core_rnn_cell.EmbeddingWrapper(cell, self.vocab_size,
@@ -149,7 +167,7 @@ class Seq2SeqModel(object):
       cell = core_rnn_cell.BasicLSTMCell(cell_size)
       if self.dropout != 0.0:
         cell = core_rnn_cell.DropoutWrapper(cell,
-                                            output_keep_prob=1-self.dropout_op)
+                                            output_keep_prob=1 - self.dropout_op)
       if stack_size > 1:
         cell = core_rnn_cell.MultiRNNCell([cell] * stack_size)
       embedded_cell = core_rnn_cell.EmbeddingWrapper(cell,
@@ -170,7 +188,8 @@ class Seq2SeqModel(object):
             next_input = tf.reshape(self.dec_inputs[i], [-1])
           emb_output, state = embedded_cell(next_input, state)
           if hiddens:
-            output = attentional_hidden_state(hiddens, emb_output)
+            hs = [t[-1][-1] for t in hiddens]
+            output = attentional_hidden_state(emb_output, hs)
           else:
             output = emb_output
           outputs.append(output)

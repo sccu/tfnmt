@@ -13,7 +13,7 @@ LOG = logging.getLogger()
 logging.basicConfig(format="%(asctime)s %(levelname)-8s %(message)s",
                     level=logging.DEBUG)
 
-tf.app.flags.DEFINE_integer("batch_size", 64, "Batch size")
+tf.app.flags.DEFINE_integer("batch_size", 32, "Batch size")
 tf.app.flags.DEFINE_integer("max_data_size", 1000000, "Maximum data size")
 tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs")
 tf.app.flags.DEFINE_integer("cell_size", 600, "LSTM cell size")
