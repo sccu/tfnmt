@@ -19,10 +19,8 @@ def score(ht, hs):
 def attentional_hidden_state(ht, hiddens):
   with tf.variable_scope("attn"):
     cell_size = ht.get_shape()[1].value
-    attn_Wc = tf.get_variable("attn_Wc", [2 * cell_size, cell_size], tf.float32,
-                              initializer=tf.random_normal_initializer())
-    attn_b = tf.get_variable("attn_b", [cell_size], tf.float32,
-                             initializer=tf.constant_initializer())
+    attn_Wc = tf.get_variable("attn_Wc", [2 * cell_size, cell_size])
+    attn_b = tf.get_variable("attn_b", [cell_size])
 
     scores = [score(ht, hs) for hs in hiddens]
     exps = [tf.exp(s) for s in scores]
@@ -54,11 +52,9 @@ class Seq2SeqModel(object):
     num_samples = 512
 
     with tf.variable_scope("seq2seq"):
-      w_t = tf.get_variable("proj_w", [vocab_size, cell_size],
-                            initializer=tf.random_normal_initializer())
+      w_t = tf.get_variable("proj_w", [vocab_size, cell_size])
       w = tf.transpose(w_t)
-      b = tf.get_variable("proj_b", [vocab_size],
-                          initializer=tf.constant_initializer())
+      b = tf.get_variable("proj_b", [vocab_size])
       self.output_projection = (w, b)
 
       self.for_inference = tf.placeholder(tf.bool)
