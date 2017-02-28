@@ -20,9 +20,9 @@ def attentional_hidden_state(ht, hiddens):
   with tf.variable_scope("attn"):
     cell_size = ht.get_shape()[1].value
     attn_Wc = tf.get_variable("attn_Wc", [2 * cell_size, cell_size], tf.float32,
-                              initializer=tf.random_uniform_initializer(0, 0.1))
+                              initializer=tf.random_normal_initializer())
     attn_b = tf.get_variable("attn_b", [cell_size], tf.float32,
-                             initializer=tf.constant_initializer(0))
+                             initializer=tf.constant_initializer())
 
     scores = [score(ht, hs) for hs in hiddens]
     exps = [tf.exp(s) for s in scores]
@@ -54,9 +54,11 @@ class Seq2SeqModel(object):
     num_samples = 512
 
     with tf.variable_scope("seq2seq"):
-      w_t = tf.get_variable("proj_w", [vocab_size, cell_size])
+      w_t = tf.get_variable("proj_w", [vocab_size, cell_size],
+                            initializer=tf.random_normal_initializer())
       w = tf.transpose(w_t)
-      b = tf.get_variable("proj_b", [vocab_size])
+      b = tf.get_variable("proj_b", [vocab_size],
+                          initializer=tf.constant_initializer())
       self.output_projection = (w, b)
 
       self.for_inference = tf.placeholder(tf.bool)
@@ -141,17 +143,17 @@ class Seq2SeqModel(object):
                                             output_keep_prob=1 - self.dropout_op)
       if stack_size > 1:
         cell = core_rnn_cell.MultiRNNCell([cell] * stack_size)
-      embedded_cell = core_rnn_cell.EmbeddingWrapper(cell, self.vocab_size,
-                                                     self.embedding_size)
+      cell = core_rnn_cell.EmbeddingWrapper(cell, self.vocab_size,
+                                            self.embedding_size)
 
       # [batch_size, seq_len] => list of [batch_size, 1]
-      state = embedded_cell.zero_state(batch_size, tf.float32)
+      state = cell.zero_state(batch_size, tf.float32)
       outputs = []
       for i in xrange(self.seq_len):
         if i > 0:
           scope.reuse_variables()
         # [batch_size, 1] => [batch_size]
-        _, state = embedded_cell(self.enc_inputs[i], state)
+        _, state = cell(self.enc_inputs[i], state)
         outputs.append(state)
       return outputs, state
 

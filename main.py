@@ -69,10 +69,10 @@ def main(argv=None):
         if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_print == 0:
           ppl = np.exp(np.average(losses))
           losses = []
-          LOG.info("Epoch: %d, batch: %d/%d, PPL: %f, LR: %f", epoch,
+          LOG.info("Epoch: %d, batch: %d/%d, PPL: %.3f, LR: %.3f", epoch,
                    int(offset / FLAGS.batch_size) + 1,
-                   data_manager.get_trainset_size() / FLAGS.batch_size, ppl,
-                   model.learning_rate.eval())
+                   data_manager.get_trainset_size() / FLAGS.batch_size,
+                   min(1000, ppl), model.learning_rate.eval())
 
           cv_offset = offset % (
             data_manager.get_testset_size() - FLAGS.batch_size)
