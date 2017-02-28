@@ -67,12 +67,13 @@ def main(argv=None):
         loss = model.step(sess, enc_inputs, dec_inputs, global_step)
         losses.append(loss)
         if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_print == 0:
-          ppl = np.exp(np.average(losses))
+          avg_loss = np.average(losses)
+          ppl = np.exp(min(10, avg_loss))
           losses = []
-          LOG.info("Epoch: %d, batch: %d/%d, PPL: %.3f, LR: %.3f", epoch,
-                   int(offset / FLAGS.batch_size) + 1,
+          LOG.info("Epoch: %d, batch: %d/%d, PPL: %.3f, Loss: %.3f, LR: %.3f",
+                   epoch, int(offset / FLAGS.batch_size) + 1,
                    data_manager.get_trainset_size() / FLAGS.batch_size,
-                   min(1000, ppl), model.learning_rate.eval())
+                   ppl, avg_loss, model.learning_rate.eval())
 
           cv_offset = offset % (
             data_manager.get_testset_size() - FLAGS.batch_size)
