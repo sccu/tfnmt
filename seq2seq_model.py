@@ -18,10 +18,11 @@ def score(ht, hs):
 
 def attentional_hidden_state(ht, hiddens):
   with tf.variable_scope("attn"):
-    batch_size = ht.get_shape()[0].value
     cell_size = ht.get_shape()[1].value
-    attn_Wc = tf.get_variable("attn_Wc", [2 * cell_size, cell_size], tf.float32)
-    attn_b = tf.get_variable("attn_b", [cell_size], tf.float32)
+    attn_Wc = tf.get_variable("attn_Wc", [2 * cell_size, cell_size], tf.float32,
+                              initializer=tf.random_uniform_initializer(0, 0.1))
+    attn_b = tf.get_variable("attn_b", [cell_size], tf.float32,
+                             initializer=tf.constant_initializer(0))
 
     scores = [score(ht, hs) for hs in hiddens]
     exps = [tf.exp(s) for s in scores]
