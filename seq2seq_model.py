@@ -68,8 +68,10 @@ class Seq2SeqModel(object):
       self.setup_input_placeholders(seq_len)
       self.dec_labels = self.dec_inputs[1:]
 
+      LOG.info("Creating rnn encoder...")
       hiddens, enc_state = self.create_rnn_encoder(cell_size, stack_size,
                                                    batch_size)
+      LOG.info("Creating rnn decoder...")
       ret = self.create_rnn_decoder(enc_state, cell_size, stack_size,
                                     hiddens=hiddens)
       self.dec_outputs = ret[:seq_len]
