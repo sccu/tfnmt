@@ -56,15 +56,13 @@ def main(argv=None):
     losses = []
     cv_losses = []
     cv_ppl_history = []
-    global_step = 0
     for epoch in xrange(1, FLAGS.epochs + 1):
-      for offset in range(0,
-                          data_manager.get_trainset_size() - FLAGS.batch_size,
-                          FLAGS.batch_size):
-        global_step += 1
+      for offset in xrange(0,
+                           data_manager.get_trainset_size() - FLAGS.batch_size,
+                           FLAGS.batch_size):
         enc_inputs, dec_inputs = data_manager.get_batch(offset,
                                                         FLAGS.batch_size)
-        loss = model.step(sess, enc_inputs, dec_inputs, global_step)
+        loss = model.step(sess, enc_inputs, dec_inputs)
         losses.append(loss)
         if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_print == 0:
           ppl = np.exp(np.average(losses))
@@ -78,8 +76,7 @@ def main(argv=None):
             data_manager.get_testset_size() - FLAGS.batch_size)
           enc_inputs, dec_inputs = data_manager.get_test_batch(cv_offset,
                                                                FLAGS.batch_size)
-          cv_loss = model.step(sess, enc_inputs, dec_inputs, global_step,
-                               trainable=False)
+          cv_loss = model.step(sess, enc_inputs, dec_inputs, trainable=False)
           cv_losses.append(cv_loss)
 
         # cross-validation test and write checkpoint file.
@@ -88,7 +85,7 @@ def main(argv=None):
           cv_losses = []
           save_path = saver.save(sess,
                                  "out/model.ckpt-%02d-%.3f" % (epoch, cv_ppl),
-                                 global_step)
+                                 model.global_step)
           LOG.info("Model saved in the file: %s", save_path)
           translations = model.predict(sess, enc_inputs, dec_inputs).tolist()
           for i in range(min(5, FLAGS.batch_size)):

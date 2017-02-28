@@ -1,22 +1,17 @@
 import logging
 import tensorflow as tf
-from tensorflow.contrib.rnn.python.ops import core_rnn_cell
+from tensorflow.contrib.rnn.python.ops.core_rnn_cell import *
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.util import nest
 
 LOG = logging.getLogger()
 
 
-def align(ht, hs):
-  pass
-
-
-def score(ht, hs):
-  # dot product
+def dot_score(ht, hs):
   return ht * hs
 
 
-def attentional_hidden_state(ht, hiddens):
+def attentional_hidden_state(ht, hiddens, score=dot_score):
   with tf.variable_scope("attn"):
     cell_size = ht.get_shape()[1].value
     attn_Wc = tf.get_variable("attn_Wc", [2 * cell_size, cell_size])
@@ -36,15 +31,16 @@ class Seq2SeqModel(object):
   def __init__(self, sess, cell_size, stack_size, batch_size, seq_len,
                vocab_size, embedding_size, learning_rate,
                learning_rate_decaying_factor=0.9, max_gradient_norm=5.0,
-               dropout=0.3):
-    self.BOS_ID = 0
-    self.PAD_ID = 2
+               dropout=0.3, BOS_ID=0, PAD_ID=2):
+    self.BOS_ID = BOS_ID
+    self.PAD_ID = PAD_ID
     self.cell_size = cell_size
     self.seq_len = seq_len
     self.vocab_size = vocab_size
     self.embedding_size = embedding_size
     self.dropout_op = tf.placeholder(tf.float32)
     self.dropout = dropout
+    self.global_step = tf.Variable(0, trainable=False)
     self.learning_rate = tf.Variable(learning_rate, trainable=False)
     self.learning_rate_decaying_op = self.learning_rate.assign(
       self.learning_rate * learning_rate_decaying_factor)
@@ -78,7 +74,6 @@ class Seq2SeqModel(object):
         tf.matmul(o, self.output_projection[0]) + self.output_projection[1],
         axis=1) for o in self.dec_outputs]
       self.inference_outputs = tf.transpose(self.inference_outputs)
-      dec_state = ret[seq_len:]
 
       # word id outputs
 
@@ -102,7 +97,8 @@ class Seq2SeqModel(object):
       gradients = tf.gradients(self.loss, params)
       clipped_gradients, norm = tf.clip_by_global_norm(gradients,
                                                        max_gradient_norm)
-      self.update_op = optimizer.apply_gradients(zip(clipped_gradients, params))
+      self.update_op = optimizer.apply_gradients(zip(clipped_gradients, params),
+                                                 global_step=self.global_step)
 
       # write logs
       tf.summary.scalar("PPL", tf.exp(self.loss))
@@ -133,14 +129,11 @@ class Seq2SeqModel(object):
 
   def create_rnn_encoder(self, cell_size, stack_size, batch_size):
     with tf.variable_scope("rnn_encoder") as scope:
-      cell = core_rnn_cell.BasicLSTMCell(cell_size)
+      cell = BasicLSTMCell(cell_size)
       if self.dropout != 0.0:
-        cell = core_rnn_cell.DropoutWrapper(cell,
-                                            output_keep_prob=1 - self.dropout_op)
-      if stack_size > 1:
-        cell = core_rnn_cell.MultiRNNCell([cell] * stack_size)
-      cell = core_rnn_cell.EmbeddingWrapper(cell, self.vocab_size,
-                                            self.embedding_size)
+        cell = DropoutWrapper(cell, output_keep_prob=1 - self.dropout_op)
+      cell = MultiRNNCell([cell] * stack_size)
+      cell = EmbeddingWrapper(cell, self.vocab_size, self.embedding_size)
 
       # [batch_size, seq_len] => list of [batch_size, 1]
       state = cell.zero_state(batch_size, tf.float32)
@@ -165,15 +158,11 @@ class Seq2SeqModel(object):
     :return: outputs is a list of tensors which shape is [seq_len, embedding_size]. state's shape is [None, cell_size]
     """
     with tf.variable_scope("rnn_decoder") as scope:
-      cell = core_rnn_cell.BasicLSTMCell(cell_size)
+      cell = BasicLSTMCell(cell_size)
       if self.dropout != 0.0:
-        cell = core_rnn_cell.DropoutWrapper(cell,
-                                            output_keep_prob=1 - self.dropout_op)
-      if stack_size > 1:
-        cell = core_rnn_cell.MultiRNNCell([cell] * stack_size)
-      embedded_cell = core_rnn_cell.EmbeddingWrapper(cell,
-                                                     self.vocab_size,
-                                                     self.embedding_size)
+        cell = DropoutWrapper(cell, output_keep_prob=1 - self.dropout_op)
+      cell = MultiRNNCell([cell] * stack_size)
+      cell = EmbeddingWrapper(cell, self.vocab_size, self.embedding_size)
 
       def feeder(for_inference=False):
         state = encoder_state
@@ -187,9 +176,9 @@ class Seq2SeqModel(object):
               self.output_projection[1], axis=1)
           else:
             next_input = tf.reshape(self.dec_inputs[i], [-1])
-          emb_output, state = embedded_cell(next_input, state)
+          emb_output, state = cell(next_input, state)
           if hiddens:
-            hs = [t[-1][-1] for t in hiddens]
+            hs = [h[-1][-1] for h in hiddens]
             output = attentional_hidden_state(emb_output, hs)
           else:
             output = emb_output
@@ -200,19 +189,15 @@ class Seq2SeqModel(object):
       return control_flow_ops.cond(self.for_inference, lambda: feeder(True),
                                    lambda: feeder(False))
 
-  def step(self, sess, enc_inputs, dec_inputs, global_step, trainable=True):
+  def step(self, sess, enc_inputs, dec_inputs, trainable=True):
     """
 
     :param sess:
     :param enc_inputs: [batch_size, seq_len] int32 array.
     :param dec_inputs: [batch_size, seq_len] int32 array.
-    :param global_step:
     :param trainable:
     :return:
     """
-
-    if global_step == 10:
-      self.train_writer.add_graph(sess.graph)
 
     feed_dict = {self.for_inference: False,
                  self.dropout_op: - self.dropout if trainable else 0.0,
@@ -222,10 +207,10 @@ class Seq2SeqModel(object):
     if trainable:
       loss, _, summary = sess.run([self.loss, self.update_op, self.summary_op],
                                   feed_dict)
-      self.train_writer.add_summary(summary, global_step)
+      self.train_writer.add_summary(summary, self.global_step.eval(sess))
     else:
       loss, summary = sess.run([self.loss, self.summary_op], feed_dict)
-      self.test_writer.add_summary(summary, global_step)
+      self.test_writer.add_summary(summary, self.global_step.eval(sess))
     return loss
 
   def predict(self, sess, enc_inputs, dec_inputs):
@@ -233,5 +218,4 @@ class Seq2SeqModel(object):
                  self.dropout_op: 0.0,
                  self.enc_placeholder: enc_inputs,
                  self.dec_placeholder: dec_inputs}
-    ret = sess.run(self.inference_outputs, feed_dict)
-    return ret
+    return sess.run(self.inference_outputs, feed_dict)
