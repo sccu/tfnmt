@@ -105,8 +105,7 @@ class Seq2SeqModel(object):
       self.update_op = optimizer.apply_gradients(zip(clipped_gradients, params))
 
       # write logs
-      tf.summary.scalar("PPL", tf.exp(tf.minimum(tf.constant(10.0), self.loss)))
-      tf.summary.scalar("Loss", self.loss)
+      tf.summary.scalar("PPL", tf.exp(self.loss))
       self.summary_op = tf.summary.merge_all()
       self.train_writer = tf.summary.FileWriter("log/train", graph=sess.graph)
       self.test_writer = tf.summary.FileWriter("log/test", graph=sess.graph)
