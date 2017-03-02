@@ -16,6 +16,8 @@ def attentional_hidden_state(ht, hiddens, score=dot_score):
     cell_size = ht.get_shape()[1].value
     attn_Wc = tf.get_variable("attn_Wc", [2 * cell_size, cell_size])
     attn_b = tf.get_variable("attn_b", [cell_size])
+    tf.summary.histogram('attn_Wc', attn_Wc)
+    tf.summary.histogram('attn_b', attn_b)
 
     scores = [score(ht, hs) for hs in hiddens]
     exps = [tf.exp(s) for s in scores]
@@ -40,7 +42,7 @@ class Seq2SeqModel(object):
     self.embedding_size = embedding_size
     self.dropout_op = tf.placeholder(tf.float32)
     self.dropout = dropout
-    self.global_step = tf.Variable(0, trainable=False)
+    self.global_step = tf.Variable(1, trainable=False)
     self.learning_rate = tf.Variable(learning_rate, trainable=False)
     self.learning_rate_decaying_op = self.learning_rate.assign(
       self.learning_rate * learning_rate_decaying_factor)
@@ -52,6 +54,9 @@ class Seq2SeqModel(object):
       w = tf.transpose(w_t)
       b = tf.get_variable("proj_b", [vocab_size])
       self.output_projection = (w, b)
+
+      tf.summary.histogram('output_proj_w', w)
+      tf.summary.histogram('output_proj_b', b)
 
       self.for_inference = tf.placeholder(tf.bool)
       self.dec_placeholder = tf.placeholder(tf.int32, [batch_size, seq_len],
@@ -160,7 +165,7 @@ class Seq2SeqModel(object):
     with tf.variable_scope("rnn_decoder") as scope:
       cell = BasicLSTMCell(cell_size)
       if self.dropout != 0.0:
-        cell = DropoutWrapper(cell, output_keep_prob=1 - self.dropout_op)
+        cell = DropoutWrapper(cell, output_keep_prob=1.0 - self.dropout_op)
       cell = MultiRNNCell([cell] * stack_size)
       cell = EmbeddingWrapper(cell, self.vocab_size, self.embedding_size)
 
@@ -199,18 +204,25 @@ class Seq2SeqModel(object):
     :return:
     """
 
+    global_step = sess.run(self.global_step)
+    LOG.debug("global step: %d", global_step)
     feed_dict = {self.for_inference: False,
-                 self.dropout_op: self.dropout if trainable else 0.0,
+                 self.dropout_op: (self.dropout if trainable else 0.0),
                  self.enc_placeholder: enc_inputs,
                  self.dec_placeholder: dec_inputs}
-
+    output_list = [self.loss]
     if trainable:
-      loss, _, summary = sess.run([self.loss, self.update_op, self.summary_op],
-                                  feed_dict)
-      self.train_writer.add_summary(summary, self.global_step.eval(sess))
-    else:
-      loss, summary = sess.run([self.loss, self.summary_op], feed_dict)
-      self.test_writer.add_summary(summary, self.global_step.eval(sess))
+      output_list.append(self.update_op)
+    if global_step % 10 == 0:
+      output_list.append(self.summary_op)
+
+    results = sess.run(output_list, feed_dict=feed_dict)
+
+    loss = results[output_list.index(self.loss)]
+    if global_step % 10 == 0:
+      summary = results[output_list.index(self.summary_op)]
+      writer = self.train_writer if trainable else self.test_writer
+      writer.add_summary(summary, global_step)
     return loss
 
   def predict(self, sess, enc_inputs, dec_inputs):
