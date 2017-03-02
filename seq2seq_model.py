@@ -200,7 +200,7 @@ class Seq2SeqModel(object):
     """
 
     feed_dict = {self.for_inference: False,
-                 self.dropout_op: - self.dropout if trainable else 0.0,
+                 self.dropout_op: self.dropout if trainable else 0.0,
                  self.enc_placeholder: enc_inputs,
                  self.dec_placeholder: dec_inputs}
 
