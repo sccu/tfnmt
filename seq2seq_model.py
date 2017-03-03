@@ -30,10 +30,9 @@ def attentional_hidden_state(ht, hiddens, score=dot_score):
 
 
 class Seq2SeqModel(object):
-  def __init__(self, sess, cell_size, stack_size, batch_size, seq_len,
-               vocab_size, embedding_size, learning_rate,
-               learning_rate_decaying_factor=0.9, max_gradient_norm=5.0,
-               dropout=0.3, BOS_ID=0, PAD_ID=2):
+  def __init__(self, cell_size, stack_size, batch_size, seq_len, vocab_size,
+               embedding_size, learning_rate, learning_rate_decaying_factor=0.9,
+               max_gradient_norm=5.0, dropout=0.3, BOS_ID=0, PAD_ID=2):
     self.BOS_ID = BOS_ID
     self.PAD_ID = PAD_ID
     self.cell_size = cell_size
@@ -108,8 +107,6 @@ class Seq2SeqModel(object):
       # write logs
       tf.summary.scalar("PPL", tf.exp(self.loss))
       self.summary_op = tf.summary.merge_all()
-      self.train_writer = tf.summary.FileWriter("log/train", graph=sess.graph)
-      self.test_writer = tf.summary.FileWriter("log/test", graph=sess.graph)
 
   def setup_input_placeholders(self, seq_len):
     enc_inputs = tf.split(self.enc_placeholder, num_or_size_splits=seq_len,
@@ -194,7 +191,7 @@ class Seq2SeqModel(object):
       return control_flow_ops.cond(self.for_inference, lambda: feeder(True),
                                    lambda: feeder(False))
 
-  def step(self, sess, enc_inputs, dec_inputs, trainable=True):
+  def step(self, sess, enc_inputs, dec_inputs, trainable=True, writer=None):
     """
 
     :param sess:
@@ -212,15 +209,14 @@ class Seq2SeqModel(object):
     output_list = [self.loss]
     if trainable:
       output_list.append(self.update_op)
-    if global_step % 100 == 0 or not trainable:
+    if writer:
       output_list.append(self.summary_op)
 
     results = sess.run(output_list, feed_dict=feed_dict)
 
     loss = results[output_list.index(self.loss)]
-    if global_step % 100 == 0 or not trainable:
+    if writer:
       summary = results[output_list.index(self.summary_op)]
-      writer = self.train_writer if trainable else self.test_writer
       writer.add_summary(summary, global_step)
     return loss
 
