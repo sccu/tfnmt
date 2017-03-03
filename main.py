@@ -46,10 +46,10 @@ def main(argv=None):
 
   with tf.Session() as sess:
     LOG.info("Building model...")
-    model = Seq2SeqModel(sess, FLAGS.cell_size, FLAGS.stack_size,
-                         FLAGS.batch_size, FLAGS.seq_len, FLAGS.vocab_size,
-                         FLAGS.embedding_size, FLAGS.learning_rate,
-                         dropout=FLAGS.dropout, num_samples=FLAGS.num_samples)
+    model = Seq2SeqModel(FLAGS.cell_size, FLAGS.stack_size, FLAGS.batch_size,
+                         FLAGS.seq_len, FLAGS.vocab_size, FLAGS.embedding_size,
+                         FLAGS.learning_rate, dropout=FLAGS.dropout,
+                         num_samples=FLAGS.num_samples)
     saver = tf.train.Saver()
 
     checkpoint = tf.train.get_checkpoint_state(out_dir)
