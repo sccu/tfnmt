@@ -26,7 +26,7 @@ tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate")
 tf.app.flags.DEFINE_integer("steps_per_print", 10, "Steps per print")
 tf.app.flags.DEFINE_integer("steps_per_save", 200, "Steps per save")
 tf.app.flags.DEFINE_float("dropout", 0.3, "Dropout")
-tf.app.flags.DEFINE_float("num_samples", 2048,
+tf.app.flags.DEFINE_integer("num_samples", 2048,
                           "Number of samples in a sampled softmax")
 tf.app.flags.DEFINE_string("out_dir", "out", "Output directory")
 tf.app.flags.DEFINE_string("log_dir", "log", "Log directory")
