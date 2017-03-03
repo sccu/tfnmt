@@ -85,7 +85,7 @@ def main(argv=None):
           cv_losses = []
           save_path = saver.save(sess,
                                  "out/model.ckpt-%02d-%.3f" % (epoch, cv_ppl),
-                                 model.global_step)
+                                 model.global_step-1)
           LOG.info("Model saved in the file: %s", save_path)
           translations = model.predict(sess, enc_inputs, dec_inputs).tolist()
           for i in range(min(5, FLAGS.batch_size)):
