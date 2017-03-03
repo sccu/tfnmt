@@ -32,7 +32,7 @@ def attentional_hidden_state(ht, hiddens, score=dot_score):
 class Seq2SeqModel(object):
   def __init__(self, cell_size, stack_size, batch_size, seq_len, vocab_size,
                embedding_size, learning_rate, learning_rate_decaying_factor=0.9,
-               max_gradient_norm=5.0, dropout=0.3, BOS_ID=0, PAD_ID=2):
+               num_samples=2048, max_gradient_norm=5.0, dropout=0.3, BOS_ID=0, PAD_ID=2):
     self.BOS_ID = BOS_ID
     self.PAD_ID = PAD_ID
     self.cell_size = cell_size
@@ -45,8 +45,6 @@ class Seq2SeqModel(object):
     self.learning_rate = tf.Variable(learning_rate, trainable=False)
     self.learning_rate_decaying_op = self.learning_rate.assign(
       self.learning_rate * learning_rate_decaying_factor)
-
-    num_samples = 512
 
     with tf.variable_scope("seq2seq"):
       w_t = tf.get_variable("proj_w", [vocab_size, cell_size])

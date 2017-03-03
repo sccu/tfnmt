@@ -27,26 +27,32 @@ tf.app.flags.DEFINE_integer("steps_per_print", 10, "Steps per print")
 tf.app.flags.DEFINE_integer("steps_per_save", 200, "Steps per save")
 tf.app.flags.DEFINE_float("dropout", 0.3, "Dropout")
 tf.app.flags.DEFINE_integer("num_samples", 2048,
-                          "Number of samples in a sampled softmax")
+                            "Number of samples in a sampled softmax")
 tf.app.flags.DEFINE_string("out_dir", "out", "Output directory")
 tf.app.flags.DEFINE_string("log_dir", "log", "Log directory")
 
 
 def main(argv=None):
+  root_dir = os.path.dirname(os.path.realpath(__file__))
+  data_dir = os.path.join(root_dir, "data")
+  out_dir = os.path.join(root_dir, FLAGS.out_dir)
+  log_dir = os.path.join(root_dir, FLAGS.log_dir)
+
   LOG.info("Preparing dataset...")
   data_manager = DataSet("train.zh", "train.kr", "test.zh", "test.kr",
                          FLAGS.seq_len, FLAGS.vocab_size,
-                         max_data_size=FLAGS.max_data_size)
+                         max_data_size=FLAGS.max_data_size,
+                         data_dir=data_dir, out_dir=out_dir)
 
   with tf.Session() as sess:
     LOG.info("Building model...")
     model = Seq2SeqModel(sess, FLAGS.cell_size, FLAGS.stack_size,
                          FLAGS.batch_size, FLAGS.seq_len, FLAGS.vocab_size,
                          FLAGS.embedding_size, FLAGS.learning_rate,
-                         dropout=FLAGS.dropout)
+                         dropout=FLAGS.dropout, num_samples=FLAGS.num_samples)
     saver = tf.train.Saver()
 
-    checkpoint = tf.train.get_checkpoint_state(FLAGS.out_dir)
+    checkpoint = tf.train.get_checkpoint_state(out_dir)
     if checkpoint and checkpoint.model_checkpoint_path:
       LOG.info("Restoring a model from: %s", checkpoint.model_checkpoint_path)
       saver.restore(sess, checkpoint.model_checkpoint_path)
@@ -58,9 +64,9 @@ def main(argv=None):
     losses = []
     cv_losses = []
     cv_ppl_history = []
-    train_writer = tf.summary.FileWriter(os.path.join(FLAGS.log_dir, "train"),
+    train_writer = tf.summary.FileWriter(os.path.join(log_dir, "train"),
                                          graph=sess.graph)
-    cv_writer = tf.summary.FileWriter(os.path.join(FLAGS.log_dir, "cv"),
+    cv_writer = tf.summary.FileWriter(os.path.join(log_dir, "cv"),
                                       graph=sess.graph)
     for epoch in xrange(1, FLAGS.epochs + 1):
       for offset in xrange(0,
@@ -93,7 +99,7 @@ def main(argv=None):
         if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_save == 0:
           cv_ppl = np.exp(np.average(cv_losses))
           cv_losses = []
-          save_prefix = os.path.join(FLAGS.out_dir,
+          save_prefix = os.path.join(out_dir,
                                      "model.ckpt-%02d-%.3f" % (epoch, cv_ppl))
           save_path = saver.save(sess, save_prefix, global_step)
           LOG.info("Model saved in the file: %s", save_path)
@@ -111,7 +117,7 @@ def main(argv=None):
             sess.run(model.learning_rate_decaying_op)
           cv_ppl_history.append(cv_ppl)
 
-      save_prefix = os.path.join(FLAGS.out_dir, "model.ckpt-%02d" % epoch)
+      save_prefix = os.path.join(out_dir, "model.ckpt-%02d" % epoch)
       saver.save(sess, save_prefix)
 
 

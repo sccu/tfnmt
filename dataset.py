@@ -65,13 +65,13 @@ class DataSet(object):
     return words
 
   def __init__(self, src_train, tgt_train, src_test, tgt_test, seq_len,
-               vocab_size, max_data_size=sys.maxsize):
+               vocab_size, max_data_size=sys.maxsize, data_dir="data",
+               out_dir="out"):
     self.seq_len = seq_len
     self.vocab_size = vocab_size
 
-    root_dir = os.path.dirname(os.path.realpath(__file__))
-    self.data_dir = os.path.join(root_dir, "data")
-    self.out_dir = os.path.join(root_dir, "out")
+    self.data_dir = data_dir
+    self.out_dir = out_dir
 
     self.src_train_path = os.path.join(self.data_dir, src_train)
     self.tgt_train_path = os.path.join(self.data_dir, tgt_train)
