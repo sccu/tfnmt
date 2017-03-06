@@ -72,8 +72,9 @@ class Seq2SeqModel(object):
                                     hiddens=hiddens)
       self.dec_outputs = ret[:seq_len]
       self.inference_outputs = [tf.argmax(
-        tf.matmul(o, self.output_projection[0]) + self.output_projection[1],
-        axis=1) for o in self.dec_outputs]
+        tf.nn.xw_plus_b(o, self.output_projection[0],
+                        self.output_projection[1]), axis=1) for o in
+                                self.dec_outputs]
       self.inference_outputs = tf.transpose(self.inference_outputs)
 
       # word id outputs
@@ -176,8 +177,8 @@ class Seq2SeqModel(object):
             scope.reuse_variables()
           if for_inference and i > 0:
             next_input = tf.argmax(
-              tf.matmul(emb_output, self.output_projection[0]) +
-              self.output_projection[1], axis=1)
+              tf.nn.xw_plus_b(output, self.output_projection[0],
+                              self.output_projection[1]), axis=1)
           else:
             next_input = tf.reshape(self.dec_inputs[i], [-1])
           emb_output, state = cell(next_input, state)

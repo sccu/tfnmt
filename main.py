@@ -29,14 +29,12 @@ tf.app.flags.DEFINE_float("dropout", 0.3, "Dropout")
 tf.app.flags.DEFINE_integer("num_samples", 2048,
                             "Number of samples in a sampled softmax")
 tf.app.flags.DEFINE_string("out_dir", "out", "Output directory")
-tf.app.flags.DEFINE_string("log_dir", "log", "Log directory")
 
 
 def main(argv=None):
   root_dir = os.path.dirname(os.path.realpath(__file__))
   data_dir = os.path.join(root_dir, "data")
   out_dir = os.path.join(root_dir, FLAGS.out_dir)
-  log_dir = os.path.join(root_dir, FLAGS.log_dir)
 
   LOG.info("Preparing dataset...")
   data_manager = DataSet("train.zh", "train.kr", "test.zh", "test.kr",
@@ -64,9 +62,9 @@ def main(argv=None):
     losses = []
     cv_losses = []
     cv_ppl_history = []
-    train_writer = tf.summary.FileWriter(os.path.join(log_dir, "train"),
+    train_writer = tf.summary.FileWriter(os.path.join(out_dir, "train"),
                                          graph=sess.graph)
-    cv_writer = tf.summary.FileWriter(os.path.join(log_dir, "cv"),
+    cv_writer = tf.summary.FileWriter(os.path.join(out_dir, "cv"),
                                       graph=sess.graph)
     for epoch in xrange(1, FLAGS.epochs + 1):
       for offset in xrange(0,
