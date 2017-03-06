@@ -16,8 +16,6 @@ def attentional_hidden_state(ht, hiddens, score=dot_score):
     cell_size = ht.get_shape()[1].value
     attn_Wc = tf.get_variable("attn_Wc", [2 * cell_size, cell_size])
     attn_b = tf.get_variable("attn_b", [cell_size])
-    # tf.summary.histogram('attn_Wc', attn_Wc)
-    # tf.summary.histogram('attn_b', attn_b)
 
     scores = [score(ht, hs) for hs in hiddens]
     exps = [tf.exp(s) for s in scores]
@@ -25,14 +23,15 @@ def attentional_hidden_state(ht, hiddens, score=dot_score):
     aligns = [exp / denom for exp in exps]
     context = tf.add_n([a * hs for a, hs, in zip(aligns, hiddens)])
     concat = tf.concat([context, ht], axis=1)
-    attentional_ht = tf.tanh(tf.matmul(concat, attn_Wc) + attn_b)
+    attentional_ht = tf.tanh(tf.nn.xw_plus_b(concat, attn_Wc, attn_b))
     return attentional_ht
 
 
 class Seq2SeqModel(object):
   def __init__(self, cell_size, stack_size, batch_size, seq_len, vocab_size,
                embedding_size, learning_rate, learning_rate_decaying_factor=0.9,
-               num_samples=2048, max_gradient_norm=5.0, dropout=0.3, BOS_ID=0, PAD_ID=2):
+               num_samples=2048, max_gradient_norm=5.0, dropout=0.3, BOS_ID=0,
+               PAD_ID=2):
     self.BOS_ID = BOS_ID
     self.PAD_ID = PAD_ID
     self.cell_size = cell_size
@@ -79,20 +78,25 @@ class Seq2SeqModel(object):
 
       # word id outputs
 
-      def sampled_loss(inputs, labels):
+      def sampled_loss(logits, labels):
         labels = tf.reshape(labels, [-1, 1])
         # We need to compute the sampled_softmax_loss using 32bit floats to
         # avoid numerical instabilities.
         local_w_t = tf.cast(w_t, tf.float32)
         local_b = tf.cast(b, tf.float32)
-        local_inputs = tf.cast(inputs, tf.float32)
+        local_inputs = tf.cast(logits, tf.float32)
         return tf.cast(
           tf.nn.sampled_softmax_loss(local_w_t, local_b, labels, local_inputs,
                                      num_samples, vocab_size),
           dtype=tf.float32)
 
+      def softmax_loss(logits, labels):
+        logits = tf.nn.xw_plus_b(logits, w, b)
+        return tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits,
+                                                              labels=labels)
+
       self.loss = self.sequence_loss(self.dec_outputs, self.dec_labels,
-                                     softmax_loss_function=sampled_loss)
+                                     softmax_loss_function=softmax_loss)
       # Gradients and SGD update operation for training the model
       optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
       params = tf.trainable_variables()

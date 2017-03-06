@@ -19,7 +19,7 @@ tf.app.flags.DEFINE_integer("max_data_size", 1000000, "Maximum data size")
 tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs")
 tf.app.flags.DEFINE_integer("cell_size", 400, "LSTM cell size")
 tf.app.flags.DEFINE_integer("seq_len", 20, "Maximum sequence length")
-tf.app.flags.DEFINE_integer("stack_size", 2, "RNN stack size")
+tf.app.flags.DEFINE_integer("stack_size", 1, "RNN stack size")
 tf.app.flags.DEFINE_integer("embedding_size", 100, "Word embedding size")
 tf.app.flags.DEFINE_integer("vocab_size", 50000, "Vocab size")
 tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate")
@@ -90,9 +90,8 @@ def main(argv=None):
             data_manager.get_testset_size() - FLAGS.batch_size)
           enc_inputs, dec_inputs = data_manager.get_test_batch(cv_offset,
                                                                FLAGS.batch_size)
-          writer = cv_writer if global_step % 100 == 0 else None
           cv_loss = model.step(sess, enc_inputs, dec_inputs, trainable=False,
-                               writer=writer)
+                               writer=cv_writer)
           cv_losses.append(cv_loss)
 
         # cross-validation test and write checkpoint file.
