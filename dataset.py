@@ -59,14 +59,12 @@ class DataSet(object):
         for w in words:
           vocab_counter[w] += 1
     words = self.predefined_words + [entry[0] for entry in
-                                     vocab_counter.most_common(
-                                       self.vocab_size - len(
-                                         self.predefined_words))]
+      vocab_counter.most_common( self.vocab_size - len(self.predefined_words))]
     return words
 
   def __init__(self, src_train, tgt_train, src_test, tgt_test, seq_len,
-               vocab_size, max_data_size=sys.maxsize, data_dir="data",
-               out_dir="out"):
+      vocab_size, max_data_size=sys.maxsize, data_dir="data",
+      out_dir="out"):
     self.seq_len = seq_len
     self.vocab_size = vocab_size
 
@@ -84,14 +82,14 @@ class DataSet(object):
     self.tgt_vocab = {w: i for i, w in enumerate(self.tgt_words)}
 
     self.test_dataset = self.prepare_data(self.src_test_path,
-                                          self.tgt_test_path, self.out_dir,
-                                          max_data_size)
+      self.tgt_test_path, self.out_dir,
+      max_data_size)
     self.train_dataset = self.prepare_data(self.src_train_path,
-                                           self.tgt_train_path, self.out_dir,
-                                           max_data_size)
+      self.tgt_train_path, self.out_dir,
+      max_data_size)
 
   def prepare_data(self, src_corpus_path, tgt_corpus_path, out_dir,
-                   max_data_size):
+      max_data_size):
     src_filename = os.path.basename(src_corpus_path)
     src_ids_path = os.path.join(out_dir, src_filename + ".ids")
     tgt_filename = os.path.basename(tgt_corpus_path)
@@ -101,7 +99,7 @@ class DataSet(object):
     else:
       LOG.info("Load data from: [%s, %s]", src_ids_path, tgt_ids_path)
       src_inputs, tgt_inputs = self.load_data(src_corpus_path, tgt_corpus_path,
-                                              max_data_size)
+        max_data_size)
       self.store_data(src_inputs, src_ids_path)
       self.store_data(tgt_inputs, tgt_ids_path)
       return src_inputs, tgt_inputs
@@ -121,7 +119,7 @@ class DataSet(object):
           src_ids = [self.src_vocab.get(w, self.UNK_ID) for w in swords] + [
             self.EOS_ID]
           tgt_ids = [self.BOS_ID] + [self.tgt_vocab.get(w, self.UNK_ID) for w in
-                                     twords] + [self.EOS_ID]
+            twords] + [self.EOS_ID]
           if len(src_ids) >= self.seq_len or len(tgt_ids) >= self.seq_len:
             continue
           src_inputs.append(src_ids)
@@ -155,7 +153,7 @@ class DataSet(object):
   def get_trainset_size(self):
     return len(self.train_dataset[0])
 
-  def get_testset_size(self):
+  def get_cvset_size(self):
     return len(self.test_dataset[0])
 
   def src_ids_to_words(self, ids):

@@ -12,7 +12,7 @@ from seq2seq_model import Seq2SeqModel
 FLAGS = tf.app.flags.FLAGS
 LOG = logging.getLogger()
 logging.basicConfig(format="%(asctime)s %(levelname)-8s %(message)s",
-                    level=logging.DEBUG)
+  level=logging.DEBUG)
 
 tf.app.flags.DEFINE_integer("batch_size", 8, "Batch size")
 tf.app.flags.DEFINE_integer("max_data_size", 1000000, "Maximum data size")
@@ -27,7 +27,7 @@ tf.app.flags.DEFINE_integer("steps_per_print", 10, "Steps per print")
 tf.app.flags.DEFINE_integer("steps_per_save", 200, "Steps per save")
 tf.app.flags.DEFINE_float("dropout", 0.3, "Dropout")
 tf.app.flags.DEFINE_integer("num_samples", 2048,
-                            "Number of samples in a sampled softmax")
+  "Number of samples in a sampled softmax")
 tf.app.flags.DEFINE_string("out_dir", "out", "Output directory")
 
 
@@ -38,16 +38,16 @@ def main(argv=None):
 
   LOG.info("Preparing dataset...")
   data_manager = DataSet("train.zh", "train.kr", "test.zh", "test.kr",
-                         FLAGS.seq_len, FLAGS.vocab_size,
-                         max_data_size=FLAGS.max_data_size,
-                         data_dir=data_dir, out_dir=out_dir)
+    FLAGS.seq_len, FLAGS.vocab_size,
+    max_data_size=FLAGS.max_data_size,
+    data_dir=data_dir, out_dir=out_dir)
 
   with tf.Session() as sess:
     LOG.info("Building model...")
     model = Seq2SeqModel(FLAGS.cell_size, FLAGS.stack_size, FLAGS.batch_size,
-                         FLAGS.seq_len, FLAGS.vocab_size, FLAGS.embedding_size,
-                         FLAGS.learning_rate, dropout=FLAGS.dropout,
-                         num_samples=FLAGS.num_samples)
+      FLAGS.seq_len, FLAGS.vocab_size, FLAGS.embedding_size,
+      FLAGS.learning_rate, dropout=FLAGS.dropout,
+      num_samples=FLAGS.num_samples)
     saver = tf.train.Saver()
 
     checkpoint = tf.train.get_checkpoint_state(out_dir)
@@ -63,16 +63,16 @@ def main(argv=None):
     cv_losses = []
     cv_ppl_history = []
     train_writer = tf.summary.FileWriter(os.path.join(out_dir, "train"),
-                                         graph=sess.graph)
+      graph=sess.graph)
     cv_writer = tf.summary.FileWriter(os.path.join(out_dir, "cv"),
-                                      graph=sess.graph)
+      graph=sess.graph)
     for epoch in xrange(1, FLAGS.epochs + 1):
       for offset in xrange(0,
-                           data_manager.get_trainset_size() - FLAGS.batch_size,
-                           FLAGS.batch_size):
+              data_manager.get_trainset_size() - FLAGS.batch_size,
+          FLAGS.batch_size):
         global_step = model.global_step.eval(sess)
         enc_inputs, dec_inputs = data_manager.get_batch(offset,
-                                                        FLAGS.batch_size)
+          FLAGS.batch_size)
         writer = train_writer if global_step % 100 == 0 else None
         loss = model.step(sess, enc_inputs, dec_inputs, writer=writer)
         losses.append(loss)
@@ -80,16 +80,16 @@ def main(argv=None):
           ppl = np.exp(np.average(losses))
           losses = []
           LOG.info("Epoch: %d, batch: %d/%d, PPL: %.3f, LR: %.3f", epoch,
-                   int(offset / FLAGS.batch_size) + 1,
-                   data_manager.get_trainset_size() / FLAGS.batch_size, ppl,
-                   model.learning_rate.eval())
+            int(offset / FLAGS.batch_size) + 1,
+            data_manager.get_trainset_size() / FLAGS.batch_size, ppl,
+            model.learning_rate.eval())
 
-          cv_offset = offset % (
-            data_manager.get_testset_size() - FLAGS.batch_size)
+          cv_offset = np.random.randint(0,
+            data_manager.get_cvset_size() - FLAGS.batch_size)
           enc_inputs, dec_inputs = data_manager.get_test_batch(cv_offset,
-                                                               FLAGS.batch_size)
+            FLAGS.batch_size)
           cv_loss = model.step(sess, enc_inputs, dec_inputs, trainable=False,
-                               writer=cv_writer)
+            writer=cv_writer)
           cv_losses.append(cv_loss)
 
         # cross-validation test and write checkpoint file.
@@ -97,17 +97,17 @@ def main(argv=None):
           cv_ppl = np.exp(np.average(cv_losses))
           cv_losses = []
           save_prefix = os.path.join(out_dir,
-                                     "model.ckpt-%02d-%.3f" % (epoch, cv_ppl))
+            "model.ckpt-%02d-%.3f" % (epoch, cv_ppl))
           save_path = saver.save(sess, save_prefix, global_step)
           LOG.info("Model saved in the file: %s", save_path)
           translations = model.predict(sess, enc_inputs, dec_inputs).tolist()
           for i in range(min(5, FLAGS.batch_size)):
             LOG.debug("  source: [%s]",
-                      data_manager.src_ids_to_str(enc_inputs[i]))
+              data_manager.src_ids_to_str(enc_inputs[i]))
             LOG.debug("  target: [%s]",
-                      data_manager.tgt_ids_to_str(dec_inputs[i]))
+              data_manager.tgt_ids_to_str(dec_inputs[i]))
             LOG.debug("  translation: [%s]",
-                      data_manager.tgt_ids_to_str(translations[i]))
+              data_manager.tgt_ids_to_str(translations[i]))
 
           # decaying learning rate
           if len(cv_ppl_history) > 2 and cv_ppl > max(cv_ppl_history[-3:]):

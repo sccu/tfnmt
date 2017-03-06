@@ -29,9 +29,9 @@ def attentional_hidden_state(ht, hiddens, score=dot_score):
 
 class Seq2SeqModel(object):
   def __init__(self, cell_size, stack_size, batch_size, seq_len, vocab_size,
-               embedding_size, learning_rate, learning_rate_decaying_factor=0.9,
-               num_samples=2048, max_gradient_norm=5.0, dropout=0.3, BOS_ID=0,
-               PAD_ID=2):
+      embedding_size, learning_rate, learning_rate_decaying_factor=0.9,
+      num_samples=2048, max_gradient_norm=5.0, dropout=0.3, BOS_ID=0,
+      PAD_ID=2):
     self.BOS_ID = BOS_ID
     self.PAD_ID = PAD_ID
     self.cell_size = cell_size
@@ -40,7 +40,7 @@ class Seq2SeqModel(object):
     self.embedding_size = embedding_size
     self.dropout_op = tf.placeholder(tf.float32)
     self.dropout = dropout
-    self.global_step = tf.Variable(1, trainable=False)
+    self.global_step = tf.Variable(0, trainable=False)
     self.learning_rate = tf.Variable(learning_rate, trainable=False)
     self.learning_rate_decaying_op = self.learning_rate.assign(
       self.learning_rate * learning_rate_decaying_factor)
@@ -51,14 +51,11 @@ class Seq2SeqModel(object):
       b = tf.get_variable("proj_b", [vocab_size])
       self.output_projection = (w, b)
 
-      tf.summary.histogram('output_proj_w', w)
-      tf.summary.histogram('output_proj_b', b)
-
       self.for_inference = tf.placeholder(tf.bool)
       self.dec_placeholder = tf.placeholder(tf.int32, [batch_size, seq_len],
-                                            "dec_inputs")
+        "dec_inputs")
       self.enc_placeholder = tf.placeholder(tf.int32, [batch_size, seq_len],
-                                            "enc_inputs")
+        "enc_inputs")
       self.enc_inputs = []
       self.dec_inputs = []
       self.setup_input_placeholders(seq_len)
@@ -66,15 +63,15 @@ class Seq2SeqModel(object):
 
       LOG.info("Creating rnn encoder...")
       hiddens, enc_state = self.create_rnn_encoder(cell_size, stack_size,
-                                                   batch_size)
+        batch_size)
       LOG.info("Creating rnn decoder...")
       ret = self.create_rnn_decoder(enc_state, cell_size, stack_size,
-                                    hiddens=hiddens)
+        hiddens=hiddens)
       self.dec_outputs = ret[:seq_len]
       self.inference_outputs = [tf.argmax(
         tf.nn.xw_plus_b(o, self.output_projection[0],
-                        self.output_projection[1]), axis=1) for o in
-                                self.dec_outputs]
+          self.output_projection[1]), axis=1) for o in
+        self.dec_outputs]
       self.inference_outputs = tf.transpose(self.inference_outputs)
 
       # word id outputs
@@ -88,24 +85,24 @@ class Seq2SeqModel(object):
         local_inputs = tf.cast(logits, tf.float32)
         return tf.cast(
           tf.nn.sampled_softmax_loss(local_w_t, local_b, labels, local_inputs,
-                                     num_samples, vocab_size),
+            num_samples, vocab_size),
           dtype=tf.float32)
 
       def softmax_loss(logits, labels):
         logits = tf.nn.xw_plus_b(logits, w, b)
         return tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits,
-                                                              labels=labels)
+          labels=labels)
 
       self.loss = self.sequence_loss(self.dec_outputs, self.dec_labels,
-                                     softmax_loss_function=softmax_loss)
+        softmax_loss_function=sampled_loss)
       # Gradients and SGD update operation for training the model
       optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
       params = tf.trainable_variables()
       gradients = tf.gradients(self.loss, params)
       clipped_gradients, norm = tf.clip_by_global_norm(gradients,
-                                                       max_gradient_norm)
+        max_gradient_norm)
       self.update_op = optimizer.apply_gradients(zip(clipped_gradients, params),
-                                                 global_step=self.global_step)
+        global_step=self.global_step)
 
       # write logs
       tf.summary.scalar("PPL", tf.exp(self.loss))
@@ -113,9 +110,9 @@ class Seq2SeqModel(object):
 
   def setup_input_placeholders(self, seq_len):
     enc_inputs = tf.split(self.enc_placeholder, num_or_size_splits=seq_len,
-                          axis=1)
+      axis=1)
     dec_inputs = tf.split(self.dec_placeholder, num_or_size_splits=seq_len,
-                          axis=1)
+      axis=1)
     for i in xrange(seq_len):
       self.enc_inputs.append(tf.reshape(enc_inputs[i], [-1]))
       self.dec_inputs.append(tf.reshape(dec_inputs[i], [-1]))
@@ -152,7 +149,7 @@ class Seq2SeqModel(object):
       return outputs, state
 
   def create_rnn_decoder(self, encoder_state, cell_size, stack_size,
-                         hiddens=None):
+      hiddens=None):
     """
     Make up an RNN decoder.
 
@@ -178,7 +175,7 @@ class Seq2SeqModel(object):
           if for_inference and i > 0:
             next_input = tf.argmax(
               tf.nn.xw_plus_b(output, self.output_projection[0],
-                              self.output_projection[1]), axis=1)
+                self.output_projection[1]), axis=1)
           else:
             next_input = tf.reshape(self.dec_inputs[i], [-1])
           emb_output, state = cell(next_input, state)
@@ -192,7 +189,7 @@ class Seq2SeqModel(object):
         return outputs + state_list
 
       return control_flow_ops.cond(self.for_inference, lambda: feeder(True),
-                                   lambda: feeder(False))
+        lambda: feeder(False))
 
   def step(self, sess, enc_inputs, dec_inputs, trainable=True, writer=None):
     """
@@ -206,9 +203,9 @@ class Seq2SeqModel(object):
 
     global_step = sess.run(self.global_step)
     feed_dict = {self.for_inference: False,
-                 self.dropout_op: self.dropout if trainable else 0.0,
-                 self.enc_placeholder: enc_inputs,
-                 self.dec_placeholder: dec_inputs}
+      self.dropout_op: self.dropout if trainable else 0.0,
+      self.enc_placeholder: enc_inputs,
+      self.dec_placeholder: dec_inputs}
     output_list = [self.loss]
     if trainable:
       output_list.append(self.update_op)
@@ -225,7 +222,7 @@ class Seq2SeqModel(object):
 
   def predict(self, sess, enc_inputs, dec_inputs):
     feed_dict = {self.for_inference: True,
-                 self.dropout_op: 0.0,
-                 self.enc_placeholder: enc_inputs,
-                 self.dec_placeholder: dec_inputs}
+      self.dropout_op: 0.0,
+      self.enc_placeholder: enc_inputs,
+      self.dec_placeholder: dec_inputs}
     return sess.run(self.inference_outputs, feed_dict)
