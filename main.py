@@ -5,6 +5,7 @@ import os
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.contrib.tensorboard.plugins import projector
 
 from dataset import DataSet
 from seq2seq_model import Seq2SeqModel
@@ -38,16 +39,14 @@ def main(argv=None):
 
   LOG.info("Preparing dataset...")
   data_manager = DataSet("train.zh", "train.kr", "test.zh", "test.kr",
-    FLAGS.seq_len, FLAGS.vocab_size,
-    max_data_size=FLAGS.max_data_size,
+    FLAGS.seq_len, FLAGS.vocab_size, max_data_size=FLAGS.max_data_size,
     data_dir=data_dir, out_dir=out_dir)
 
   with tf.Session() as sess:
     LOG.info("Building model...")
     model = Seq2SeqModel(FLAGS.cell_size, FLAGS.stack_size, FLAGS.batch_size,
       FLAGS.seq_len, FLAGS.vocab_size, FLAGS.embedding_size,
-      FLAGS.learning_rate, dropout=FLAGS.dropout,
-      num_samples=FLAGS.num_samples)
+      FLAGS.learning_rate, dropout=FLAGS.dropout, num_samples=FLAGS.num_samples)
     saver = tf.train.Saver()
 
     checkpoint = tf.train.get_checkpoint_state(out_dir)
@@ -66,6 +65,14 @@ def main(argv=None):
       graph=sess.graph)
     cv_writer = tf.summary.FileWriter(os.path.join(out_dir, "cv"),
       graph=sess.graph)
+
+    # Preparing word embedding visualization
+    config = projector.ProjectorConfig()
+    embedding = config.embeddings.add()
+    embedding.tensor_name = "seq2seq/proj_w"
+    embedding.metadata_path = os.path.join(FLAGS.out_dir, "train.kr.dict")
+    projector.visualize_embeddings(train_writer, config)
+
     for epoch in xrange(1, FLAGS.epochs + 1):
       for offset in xrange(0,
               data_manager.get_trainset_size() - FLAGS.batch_size,
@@ -86,7 +93,7 @@ def main(argv=None):
 
           cv_offset = np.random.randint(0,
             data_manager.get_cvset_size() - FLAGS.batch_size)
-          enc_inputs, dec_inputs = data_manager.get_test_batch(cv_offset,
+          enc_inputs, dec_inputs = data_manager.get_cv_batch(cv_offset,
             FLAGS.batch_size)
           cv_loss = model.step(sess, enc_inputs, dec_inputs, trainable=False,
             writer=cv_writer)

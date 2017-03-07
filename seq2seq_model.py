@@ -40,7 +40,7 @@ class Seq2SeqModel(object):
     self.embedding_size = embedding_size
     self.dropout_op = tf.placeholder(tf.float32)
     self.dropout = dropout
-    self.global_step = tf.Variable(0, trainable=False)
+    self.global_step = tf.Variable(1, trainable=False)
     self.learning_rate = tf.Variable(learning_rate, trainable=False)
     self.learning_rate_decaying_op = self.learning_rate.assign(
       self.learning_rate * learning_rate_decaying_factor)
@@ -201,7 +201,6 @@ class Seq2SeqModel(object):
     :return:
     """
 
-    global_step = sess.run(self.global_step)
     feed_dict = {self.for_inference: False,
       self.dropout_op: self.dropout if trainable else 0.0,
       self.enc_placeholder: enc_inputs,
@@ -217,6 +216,7 @@ class Seq2SeqModel(object):
     loss = results[output_list.index(self.loss)]
     if writer:
       summary = results[output_list.index(self.summary_op)]
+      global_step = self.global_step.eval(sess)
       writer.add_summary(summary, global_step)
     return loss
 

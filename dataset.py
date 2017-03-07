@@ -178,7 +178,7 @@ class DataSet(object):
       pass
     return " ".join([self.tgt_words[id] for id in ids if id != self.BOS_ID])
 
-  def get_test_batch(self, offset, batch_size):
+  def get_cv_batch(self, offset, batch_size):
     src = self.test_dataset[0][offset:offset + batch_size]
     tgt = self.test_dataset[1][offset:offset + batch_size]
 
