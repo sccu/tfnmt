@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
+import sys
 
 import numpy as np
 import tensorflow as tf
@@ -31,8 +32,10 @@ tf.app.flags.DEFINE_integer("num_samples", 2048,
   "Number of samples in a sampled softmax")
 tf.app.flags.DEFINE_string("out_dir", "out", "Output directory")
 
+tf.app.flags.DEFINE_boolean("inference", False, "Inference mode")
 
-def main(argv=None):
+
+def train():
   root_dir = os.path.dirname(os.path.realpath(__file__))
   data_dir = os.path.join(root_dir, "data")
   out_dir = os.path.join(root_dir, FLAGS.out_dir)
@@ -107,7 +110,7 @@ def main(argv=None):
             "model.ckpt-%02d-%.3f" % (epoch, cv_ppl))
           save_path = saver.save(sess, save_prefix, global_step)
           LOG.info("Model saved in the file: %s", save_path)
-          translations = model.predict(sess, enc_inputs, dec_inputs).tolist()
+          translations = model.predict(sess, enc_inputs)
           for i in range(min(5, FLAGS.batch_size)):
             LOG.debug("  source: [%s]",
               data_manager.src_ids_to_str(enc_inputs[i]))
@@ -123,6 +126,49 @@ def main(argv=None):
 
       save_prefix = os.path.join(out_dir, "model.ckpt-%02d" % epoch)
       saver.save(sess, save_prefix)
+
+
+def infer():
+  root_dir = os.path.dirname(os.path.realpath(__file__))
+  data_dir = os.path.join(root_dir, "data")
+  out_dir = os.path.join(root_dir, FLAGS.out_dir)
+
+  LOG.info("Preparing dataset...")
+  data_manager = DataSet("train.zh", "train.kr", "test.zh", "test.kr",
+    FLAGS.seq_len, FLAGS.vocab_size, max_data_size=FLAGS.max_data_size,
+    data_dir=data_dir, out_dir=out_dir)
+  with tf.Session() as sess:
+
+    LOG.info("Building model...")
+    model = Seq2SeqModel(FLAGS.cell_size, FLAGS.stack_size, FLAGS.batch_size,
+      FLAGS.seq_len, FLAGS.vocab_size, FLAGS.embedding_size,
+      FLAGS.learning_rate, dropout=FLAGS.dropout, num_samples=FLAGS.num_samples)
+    saver = tf.train.Saver()
+
+    checkpoint = tf.train.get_checkpoint_state(out_dir)
+    if checkpoint and checkpoint.model_checkpoint_path:
+      LOG.info("Restoring a model from: %s", checkpoint.model_checkpoint_path)
+      saver.restore(sess, checkpoint.model_checkpoint_path)
+    else:
+      raise ValueError("Checkpoint not found")
+
+    while True:
+      line = raw_input("input: ")
+      line = line.strip()
+      if len(line) == 0:
+        break
+      LOG.info("Inferring...")
+      enc_inputs = data_manager.get_inference_batch(line, FLAGS.batch_size)
+      LOG.info("Done.")
+      translations = model.predict(sess, enc_inputs)
+      print data_manager.tgt_ids_to_str(translations[0])
+
+
+def main(argv=None):
+  if FLAGS.inference:
+   infer()
+  else:
+    train()
 
 
 if __name__ == "__main__":

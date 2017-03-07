@@ -189,3 +189,12 @@ class DataSet(object):
       dec_inputs.append(tgt[i] + [self.PAD_ID] * (self.seq_len - len(tgt[i])))
 
     return enc_inputs, dec_inputs
+
+  def get_inference_batch(self, line, batch_size):
+    words = line.split()
+    ids = [self.src_vocab.get(w, self.UNK_ID) for w in words] + [self.EOS_ID]
+    ids = ids[:self.seq_len]
+    ids += [self.PAD_ID] * (self.seq_len - len(ids))
+    enc_inputs = [ids] * batch_size
+    return enc_inputs
+

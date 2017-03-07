@@ -220,9 +220,11 @@ class Seq2SeqModel(object):
       writer.add_summary(summary, global_step)
     return loss
 
-  def predict(self, sess, enc_inputs, dec_inputs):
+  def predict(self, sess, enc_inputs):
+    dec_inputs = [[self.BOS_ID] * self.seq_len] * len(enc_inputs)
     feed_dict = {self.for_inference: True,
       self.dropout_op: 0.0,
       self.enc_placeholder: enc_inputs,
       self.dec_placeholder: dec_inputs}
-    return sess.run(self.inference_outputs, feed_dict)
+    nparr = sess.run(self.inference_outputs, feed_dict)
+    return nparr.tolist()
