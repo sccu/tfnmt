@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
-import sys
 
 import numpy as np
 import tensorflow as tf
@@ -80,7 +79,7 @@ def train():
       for offset in xrange(0,
               data_manager.get_trainset_size() - FLAGS.batch_size,
           FLAGS.batch_size):
-        global_step = model.global_step.eval(sess)
+        global_step = model.global_step.eval(sess) + 1
         enc_inputs, dec_inputs = data_manager.get_batch(offset,
           FLAGS.batch_size)
         writer = train_writer if global_step % 100 == 0 else None
@@ -125,7 +124,8 @@ def train():
           cv_ppl_history.append(cv_ppl)
 
       save_prefix = os.path.join(out_dir, "model.ckpt-%02d" % epoch)
-      saver.save(sess, save_prefix)
+      save_path = saver.save(sess, save_prefix)
+      LOG.info("Model saved in the file: %s", save_path)
 
 
 def infer():
@@ -166,7 +166,7 @@ def infer():
 
 def main(argv=None):
   if FLAGS.inference:
-   infer()
+    infer()
   else:
     train()
 

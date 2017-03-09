@@ -1,9 +1,8 @@
-import logging
 import tensorflow as tf
 from tensorflow.contrib.rnn.python.ops.core_rnn_cell import *
-from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.util import nest
 
+import logging
 LOG = logging.getLogger()
 
 
@@ -40,17 +39,12 @@ class Seq2SeqModel(object):
     self.embedding_size = embedding_size
     self.dropout_op = tf.placeholder(tf.float32)
     self.dropout = dropout
-    self.global_step = tf.Variable(1, trainable=False)
+    self.global_step = tf.Variable(0, trainable=False)
     self.learning_rate = tf.Variable(learning_rate, trainable=False)
     self.learning_rate_decaying_op = self.learning_rate.assign(
       self.learning_rate * learning_rate_decaying_factor)
 
     with tf.variable_scope("seq2seq"):
-      w_t = tf.get_variable("proj_w", [vocab_size, cell_size])
-      w = tf.transpose(w_t)
-      b = tf.get_variable("proj_b", [vocab_size])
-      self.output_projection = (w, b)
-
       self.for_inference = tf.placeholder(tf.bool)
       self.dec_placeholder = tf.placeholder(tf.int32, [batch_size, seq_len],
         "dec_inputs")
@@ -59,12 +53,17 @@ class Seq2SeqModel(object):
       self.enc_inputs = []
       self.dec_inputs = []
       self.setup_input_placeholders(seq_len)
-      self.dec_labels = self.dec_inputs[1:]
 
       LOG.info("Creating rnn encoder...")
       hiddens, enc_state = self.create_rnn_encoder(cell_size, stack_size,
         batch_size)
+
       LOG.info("Creating rnn decoder...")
+      w_t = tf.get_variable("proj_w", [vocab_size, cell_size])
+      w = tf.transpose(w_t)
+      b = tf.get_variable("proj_b", [vocab_size])
+      self.output_projection = (w, b)
+
       ret = self.create_rnn_decoder(enc_state, cell_size, stack_size,
         hiddens=hiddens)
       self.dec_outputs = ret[:seq_len]
@@ -76,24 +75,24 @@ class Seq2SeqModel(object):
 
       # word id outputs
 
-      def sampled_loss(logits, labels):
-        labels = tf.reshape(labels, [-1, 1])
+      def sampled_loss(logit, label):
+        label = tf.reshape(label, [-1, 1])
         # We need to compute the sampled_softmax_loss using 32bit floats to
         # avoid numerical instabilities.
         local_w_t = tf.cast(w_t, tf.float32)
         local_b = tf.cast(b, tf.float32)
-        local_inputs = tf.cast(logits, tf.float32)
+        local_inputs = tf.cast(logit, tf.float32)
         return tf.cast(
-          tf.nn.sampled_softmax_loss(local_w_t, local_b, labels, local_inputs,
+          tf.nn.sampled_softmax_loss(local_w_t, local_b, label, local_inputs,
             num_samples, vocab_size),
           dtype=tf.float32)
 
-      def softmax_loss(logits, labels):
-        logits = tf.nn.xw_plus_b(logits, w, b)
-        return tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits,
-          labels=labels)
+      def softmax_loss(logit, label):
+        logit = tf.nn.xw_plus_b(logit, w, b)
+        return tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logit,
+          labels=label)
 
-      self.loss = self.sequence_loss(self.dec_outputs, self.dec_labels,
+      self.loss = self.sequence_loss(self.dec_outputs[:-1], self.dec_inputs[1:],
         softmax_loss_function=sampled_loss)
       # Gradients and SGD update operation for training the model
       optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
@@ -108,14 +107,16 @@ class Seq2SeqModel(object):
       tf.summary.scalar("PPL", tf.exp(self.loss))
       self.summary_op = tf.summary.merge_all()
 
-  def setup_input_placeholders(self, seq_len):
-    enc_inputs = tf.split(self.enc_placeholder, num_or_size_splits=seq_len,
-      axis=1)
-    dec_inputs = tf.split(self.dec_placeholder, num_or_size_splits=seq_len,
-      axis=1)
-    for i in xrange(seq_len):
-      self.enc_inputs.append(tf.reshape(enc_inputs[i], [-1]))
-      self.dec_inputs.append(tf.reshape(dec_inputs[i], [-1]))
+  def sequence_loss_new(self, logits, labels, softmax_loss_function):
+    with tf.variable_scope("loss") as scope:
+      logits = tf.reshape(logits, [-1, self.cell_size])
+      labels = tf.reshape(labels, [-1])
+      masks = tf.cast(tf.not_equal(labels, self.PAD_ID), tf.float32)
+      cross_entropy = softmax_loss_function(logits, labels)
+      losses = cross_entropy * masks
+      LOG.info("losses: %s", losses)
+      log_ppl = tf.reduce_sum(losses) / tf.reduce_sum(masks)
+      return log_ppl
 
   def sequence_loss(self, logits, labels, softmax_loss_function):
     with tf.variable_scope("loss") as scope:
@@ -128,6 +129,15 @@ class Seq2SeqModel(object):
         weights.append(weight)
       log_ppl = tf.reduce_sum(tf.add_n(losses) / tf.reduce_sum(weights))
       return log_ppl
+
+  def setup_input_placeholders(self, seq_len):
+    enc_inputs = tf.split(self.enc_placeholder, num_or_size_splits=seq_len,
+      axis=1)
+    dec_inputs = tf.split(self.dec_placeholder, num_or_size_splits=seq_len,
+      axis=1)
+    for i in xrange(seq_len):
+      self.enc_inputs.append(tf.reshape(enc_inputs[i], [-1]))
+      self.dec_inputs.append(tf.reshape(dec_inputs[i], [-1]))
 
   def create_rnn_encoder(self, cell_size, stack_size, batch_size):
     with tf.variable_scope("rnn_encoder") as scope:
@@ -188,7 +198,7 @@ class Seq2SeqModel(object):
         state_list = nest.flatten(state)
         return outputs + state_list
 
-      return control_flow_ops.cond(self.for_inference, lambda: feeder(True),
+      return tf.cond(self.for_inference, lambda: feeder(True),
         lambda: feeder(False))
 
   def step(self, sess, enc_inputs, dec_inputs, trainable=True, writer=None):
