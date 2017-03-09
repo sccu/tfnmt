@@ -39,7 +39,8 @@ class Seq2SeqModel(object):
     self.embedding_size = embedding_size
     self.dropout_op = tf.placeholder(tf.float32)
     self.dropout = dropout
-    self.global_step = tf.Variable(0, trainable=False)
+    #self.global_step = tf.Variable(0, trainable=False)
+    self.global_step = tf.contrib.framework.get_or_create_global_step()
     self.learning_rate = tf.Variable(learning_rate, trainable=False)
     self.learning_rate_decaying_op = self.learning_rate.assign(
       self.learning_rate * learning_rate_decaying_factor)

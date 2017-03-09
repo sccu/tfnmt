@@ -33,6 +33,9 @@ tf.app.flags.DEFINE_string("out_dir", "out", "Output directory")
 
 tf.app.flags.DEFINE_boolean("inference", False, "Inference mode")
 
+tf.app.flags.DEFINE_integer("task_index", 0, "Task index")
+tf.app.flags.DEFINE_string("job_name", "ps", "Job name")
+
 
 def train():
   root_dir = os.path.dirname(os.path.realpath(__file__))
@@ -44,88 +47,109 @@ def train():
     FLAGS.seq_len, FLAGS.vocab_size, max_data_size=FLAGS.max_data_size,
     data_dir=data_dir, out_dir=out_dir)
 
-  with tf.Session() as sess:
-    LOG.info("Building model...")
+  cluster = tf.train.ClusterSpec(
+    {"ps": ["localhost:22222"],
+     "worker": ["localhost:22223", "localhost:22224", "localhost:22225"]})
+  server = tf.train.Server(cluster, job_name=FLAGS.job_name,
+    task_index=FLAGS.task_index)
+
+  if FLAGS.job_name == "ps":
+    LOG.info("Waiting for servers joining...")
+    server.join()
+    return
+
+  # worker process
+  with tf.device(tf.train.replica_device_setter(
+      worker_device="/job:worker/task:%d" % FLAGS.task_index, cluster=cluster)):
+    LOG.info("Build model...")
     model = Seq2SeqModel(FLAGS.cell_size, FLAGS.stack_size, FLAGS.batch_size,
       FLAGS.seq_len, FLAGS.vocab_size, FLAGS.embedding_size,
       FLAGS.learning_rate, dropout=FLAGS.dropout, num_samples=FLAGS.num_samples)
-    saver = tf.train.Saver()
 
-    checkpoint = tf.train.get_checkpoint_state(out_dir)
-    if checkpoint and checkpoint.model_checkpoint_path:
-      LOG.info("Restoring a model from: %s", checkpoint.model_checkpoint_path)
-      saver.restore(sess, checkpoint.model_checkpoint_path)
-    else:
-      LOG.info("Initializing a model...")
-      sess.run(tf.global_variables_initializer())
+    # saver = tf.train.Saver()
 
-    LOG.info("Start training...")
-    losses = []
-    cv_losses = []
-    cv_ppl_history = []
-    train_writer = tf.summary.FileWriter(os.path.join(out_dir, "train"),
-      graph=sess.graph)
-    cv_writer = tf.summary.FileWriter(os.path.join(out_dir, "cv"),
-      graph=sess.graph)
+    hooks = [tf.train.StopAtStepHook(last_step=3000)]
+    with tf.train.MonitoredTrainingSession(master=server.target,
+        is_chief=(FLAGS.task_index == 0), checkpoint_dir="out",
+        hooks=hooks) as sess:
+      checkpoint = tf.train.get_checkpoint_state(out_dir)
+      if checkpoint and checkpoint.model_checkpoint_path:
+        LOG.info("Restoring a model from: %s", checkpoint.model_checkpoint_path)
+        # saver.restore(sess, checkpoint.model_checkpoint_path)
+      else:
+        LOG.info("Initializing a model...")
+        # sess.run(tf.global_variables_initializer())
 
-    # Preparing word embedding visualization
-    config = projector.ProjectorConfig()
-    embedding = config.embeddings.add()
-    embedding.tensor_name = "seq2seq/proj_w"
-    embedding.metadata_path = os.path.join(FLAGS.out_dir, "train.kr.dict")
-    projector.visualize_embeddings(train_writer, config)
+      LOG.info("Start training...")
+      losses = []
+      cv_losses = []
+      cv_ppl_history = []
+      train_writer = tf.summary.FileWriter(os.path.join(out_dir, "train"),
+        graph=sess.graph)
+      cv_writer = tf.summary.FileWriter(os.path.join(out_dir, "cv"),
+        graph=sess.graph)
 
-    for epoch in xrange(1, FLAGS.epochs + 1):
-      for offset in xrange(0,
-              data_manager.get_trainset_size() - FLAGS.batch_size,
-          FLAGS.batch_size):
-        global_step = model.global_step.eval(sess) + 1
-        enc_inputs, dec_inputs = data_manager.get_batch(offset,
-          FLAGS.batch_size)
-        writer = train_writer if global_step % 100 == 0 else None
-        loss = model.step(sess, enc_inputs, dec_inputs, writer=writer)
-        losses.append(loss)
-        if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_print == 0:
-          ppl = np.exp(np.average(losses))
-          losses = []
-          LOG.info("Epoch: %d, batch: %d/%d, PPL: %.3f, LR: %.3f", epoch,
-            int(offset / FLAGS.batch_size) + 1,
-            data_manager.get_trainset_size() / FLAGS.batch_size, ppl,
-            model.learning_rate.eval())
+      # Preparing word embedding visualization
+      config = projector.ProjectorConfig()
+      embedding = config.embeddings.add()
+      embedding.tensor_name = "seq2seq/proj_w"
+      embedding.metadata_path = os.path.join(FLAGS.out_dir, "train.kr.dict")
+      projector.visualize_embeddings(train_writer, config)
 
-          cv_offset = np.random.randint(0,
-            data_manager.get_cvset_size() - FLAGS.batch_size)
-          enc_inputs, dec_inputs = data_manager.get_cv_batch(cv_offset,
+      for epoch in xrange(1, FLAGS.epochs + 1):
+        for offset in xrange(0,
+                data_manager.get_trainset_size() - FLAGS.batch_size,
+            FLAGS.batch_size):
+          if sess.should_stop():
+            break
+          # global_step = model.global_step.eval(sess) + 1
+          global_step = 1
+          enc_inputs, dec_inputs = data_manager.get_batch(offset,
             FLAGS.batch_size)
-          cv_loss = model.step(sess, enc_inputs, dec_inputs, trainable=False,
-            writer=cv_writer)
-          cv_losses.append(cv_loss)
+          writer = train_writer if global_step % 100 == 0 else None
+          loss = model.step(sess, enc_inputs, dec_inputs, writer=writer)
+          losses.append(loss)
+          if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_print == 0:
+            ppl = np.exp(np.average(losses))
+            losses = []
+            LOG.info("Epoch: %d, batch: %d/%d, PPL: %.3f, LR: %.3f", epoch,
+              int(offset / FLAGS.batch_size) + 1,
+              data_manager.get_trainset_size() / FLAGS.batch_size, ppl,
+              sess.run(model.learning_rate))
 
-        # cross-validation test and write checkpoint file.
-        if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_save == 0:
-          cv_ppl = np.exp(np.average(cv_losses))
-          cv_losses = []
-          save_prefix = os.path.join(out_dir,
-            "model.ckpt-%02d-%.3f" % (epoch, cv_ppl))
-          save_path = saver.save(sess, save_prefix, global_step)
-          LOG.info("Model saved in the file: %s", save_path)
-          translations = model.predict(sess, enc_inputs)
-          for i in range(min(5, FLAGS.batch_size)):
-            LOG.debug("  source: [%s]",
-              data_manager.src_ids_to_str(enc_inputs[i]))
-            LOG.debug("  target: [%s]",
-              data_manager.tgt_ids_to_str(dec_inputs[i]))
-            LOG.debug("  translation: [%s]",
-              data_manager.tgt_ids_to_str(translations[i]))
+            cv_offset = np.random.randint(0,
+              data_manager.get_cvset_size() - FLAGS.batch_size)
+            enc_inputs, dec_inputs = data_manager.get_cv_batch(cv_offset,
+              FLAGS.batch_size)
+            cv_loss = model.step(sess, enc_inputs, dec_inputs, trainable=False,
+              writer=cv_writer)
+            cv_losses.append(cv_loss)
 
-          # decaying learning rate
-          if len(cv_ppl_history) > 2 and cv_ppl > max(cv_ppl_history[-3:]):
-            sess.run(model.learning_rate_decaying_op)
-          cv_ppl_history.append(cv_ppl)
+          # cross-validation test and write checkpoint file.
+          if (offset / FLAGS.batch_size + 1) % FLAGS.steps_per_save == 0:
+            cv_ppl = np.exp(np.average(cv_losses))
+            cv_losses = []
+            save_prefix = os.path.join(out_dir,
+              "model.ckpt-%02d-%.3f" % (epoch, cv_ppl))
+            # save_path = saver.save(sess, save_prefix, global_step)
+            # LOG.info("Model saved in the file: %s", save_path)
+            translations = model.predict(sess, enc_inputs)
+            for i in range(min(5, FLAGS.batch_size)):
+              LOG.debug("  source: [%s]",
+                data_manager.src_ids_to_str(enc_inputs[i]))
+              LOG.debug("  target: [%s]",
+                data_manager.tgt_ids_to_str(dec_inputs[i]))
+              LOG.debug("  translation: [%s]",
+                data_manager.tgt_ids_to_str(translations[i]))
 
-      save_prefix = os.path.join(out_dir, "model.ckpt-%02d" % epoch)
-      save_path = saver.save(sess, save_prefix)
-      LOG.info("Model saved in the file: %s", save_path)
+            # decaying learning rate
+            if len(cv_ppl_history) > 2 and cv_ppl > max(cv_ppl_history[-3:]):
+              sess.run(model.learning_rate_decaying_op)
+            cv_ppl_history.append(cv_ppl)
+
+        # save_prefix = os.path.join(out_dir, "model.ckpt-%02d" % epoch)
+        # save_path = saver.save(sess, save_prefix)
+        # LOG.info("Model saved in the file: %s", save_path)
 
 
 def infer():
