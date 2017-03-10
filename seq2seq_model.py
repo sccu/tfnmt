@@ -3,6 +3,9 @@ from tensorflow.contrib.rnn.python.ops.core_rnn_cell import *
 from tensorflow.python.util import nest
 
 import logging
+
+from bnlstm import BNLSTMCell
+
 LOG = logging.getLogger()
 
 
@@ -141,7 +144,7 @@ class Seq2SeqModel(object):
 
   def create_rnn_encoder(self, cell_size, stack_size, batch_size):
     with tf.variable_scope("rnn_encoder") as scope:
-      cell = BasicLSTMCell(cell_size)
+      cell = BNLSTMCell(cell_size)
       if self.dropout != 0.0:
         cell = DropoutWrapper(cell, output_keep_prob=1 - self.dropout_op)
       cell = MultiRNNCell([cell] * stack_size)
@@ -170,7 +173,7 @@ class Seq2SeqModel(object):
     :return: outputs is a list of tensors which shape is [seq_len, embedding_size]. state's shape is [None, cell_size]
     """
     with tf.variable_scope("rnn_decoder") as scope:
-      cell = BasicLSTMCell(cell_size)
+      cell = BNLSTMCell(cell_size)
       if self.dropout != 0.0:
         cell = DropoutWrapper(cell, output_keep_prob=1.0 - self.dropout_op)
       cell = MultiRNNCell([cell] * stack_size)
