@@ -144,7 +144,7 @@ class Seq2SeqModel(object):
 
   def create_rnn_encoder(self, cell_size, stack_size, batch_size):
     with tf.variable_scope("rnn_encoder") as scope:
-      cell = BNLSTMCell(cell_size)
+      cell = BNLSTMCell(cell_size, tf.logical_not(self.for_inference))
       if self.dropout != 0.0:
         cell = DropoutWrapper(cell, output_keep_prob=1 - self.dropout_op)
       cell = MultiRNNCell([cell] * stack_size)
@@ -152,6 +152,7 @@ class Seq2SeqModel(object):
 
       # [batch_size, seq_len] => list of [batch_size, 1]
       state = cell.zero_state(batch_size, tf.float32)
+      state = tuple([LSTMStateTuple(c, h) for c, h in state])
       outputs = []
       for i in xrange(self.seq_len):
         if i > 0:
@@ -173,7 +174,7 @@ class Seq2SeqModel(object):
     :return: outputs is a list of tensors which shape is [seq_len, embedding_size]. state's shape is [None, cell_size]
     """
     with tf.variable_scope("rnn_decoder") as scope:
-      cell = BNLSTMCell(cell_size)
+      cell = BNLSTMCell(cell_size, tf.logical_not(self.for_inference))
       if self.dropout != 0.0:
         cell = DropoutWrapper(cell, output_keep_prob=1.0 - self.dropout_op)
       cell = MultiRNNCell([cell] * stack_size)

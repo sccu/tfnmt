@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import tensorflow as tf
+from tensorflow.contrib.rnn import LSTMStateTuple
 from tensorflow.python.ops.rnn_cell_impl import _RNNCell as RNNCell
 
 
@@ -82,14 +83,14 @@ class BNLSTMCell(RNNCell):
 
       hidden = bn_xh + bn_hh + bias
 
-      i, j, f, o = tf.split(1, 4, hidden)
+      i, j, f, o = tf.split(hidden, num_or_size_splits=4, axis=1)
 
       new_c = c * tf.sigmoid(f) + tf.sigmoid(i) * tf.tanh(j)
       bn_new_c = batch_norm(new_c, 'c', self.training)
 
       new_h = tf.tanh(bn_new_c) * tf.sigmoid(o)
 
-      return new_h, (new_c, new_h)
+      return new_h, LSTMStateTuple(new_c, new_h)
 
 
 def orthogonal(shape):
@@ -133,9 +134,9 @@ def batch_norm(x, name_scope, training, epsilon=1e-3, decay=0.999):
     offset = tf.get_variable('offset', [size])
 
     pop_mean = tf.get_variable('pop_mean', [size],
-      initializer=tf.zeros_initializer, trainable=False)
+      initializer=tf.zeros_initializer(), trainable=False)
     pop_var = tf.get_variable('pop_var', [size],
-      initializer=tf.ones_initializer, trainable=False)
+      initializer=tf.ones_initializer(), trainable=False)
     batch_mean, batch_var = tf.nn.moments(x, [0])
 
     train_mean_op = tf.assign(pop_mean,
