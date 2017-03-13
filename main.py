@@ -119,7 +119,7 @@ def train():
               data_manager.tgt_ids_to_str(translations[i]))
 
           # decaying learning rate
-          if len(cv_ppl_history) > 2 and cv_ppl > max(cv_ppl_history[-3:]):
+          if len(cv_ppl_history) > 1 and cv_ppl > max(cv_ppl_history[-2:]):
             sess.run(model.learning_rate_decaying_op)
           cv_ppl_history.append(cv_ppl)
 

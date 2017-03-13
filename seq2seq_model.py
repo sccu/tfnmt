@@ -31,7 +31,7 @@ def attentional_hidden_state(ht, hiddens, score=dot_score):
 
 class Seq2SeqModel(object):
   def __init__(self, cell_size, stack_size, batch_size, seq_len, vocab_size,
-      embedding_size, learning_rate, learning_rate_decaying_factor=0.9,
+      embedding_size, learning_rate, learning_rate_decaying_factor=0.8,
       num_samples=2048, max_gradient_norm=5.0, dropout=0.3, BOS_ID=0,
       PAD_ID=2):
     self.BOS_ID = BOS_ID
