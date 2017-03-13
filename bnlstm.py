@@ -53,6 +53,7 @@ class BNLSTMCell(RNNCell):
   def __init__(self, num_units, training):
     self.num_units = num_units
     self.training = training
+    self.timestep = 0
 
   @property
   def state_size(self):
@@ -78,18 +79,19 @@ class BNLSTMCell(RNNCell):
       xh = tf.matmul(x, W_xh)
       hh = tf.matmul(h, W_hh)
 
-      bn_xh = batch_norm(xh, 'xh', self.training)
-      bn_hh = batch_norm(hh, 'hh', self.training)
+      bn_xh = batch_norm(xh, 'xh', self.training, self.timestep)
+      bn_hh = batch_norm(hh, 'hh', self.training, self.timestep)
 
       hidden = bn_xh + bn_hh + bias
 
       i, j, f, o = tf.split(hidden, num_or_size_splits=4, axis=1)
 
       new_c = c * tf.sigmoid(f) + tf.sigmoid(i) * tf.tanh(j)
-      bn_new_c = batch_norm(new_c, 'c', self.training)
+      bn_new_c = batch_norm(new_c, 'c', self.training, self.timestep)
 
       new_h = tf.tanh(bn_new_c) * tf.sigmoid(o)
 
+      self.timestep += 1
       return new_h, LSTMStateTuple(new_c, new_h)
 
 
@@ -123,7 +125,7 @@ def orthogonal_initializer():
   return _initializer
 
 
-def batch_norm(x, name_scope, training, epsilon=1e-3, decay=0.999):
+def batch_norm(x, name_scope, training, timestep, epsilon=1e-3, decay=0.999):
   '''Assume 2d [batch, values] tensor'''
 
   with tf.variable_scope(name_scope):
@@ -133,10 +135,12 @@ def batch_norm(x, name_scope, training, epsilon=1e-3, decay=0.999):
       initializer=tf.constant_initializer(0.1))
     offset = tf.get_variable('offset', [size])
 
-    pop_mean = tf.get_variable('pop_mean', [size],
-      initializer=tf.zeros_initializer(), trainable=False)
-    pop_var = tf.get_variable('pop_var', [size],
-      initializer=tf.ones_initializer(), trainable=False)
+    with tf.variable_scope(tf.get_variable_scope(), reuse=False):
+      with tf.variable_scope("timestep_%d" % timestep):
+        pop_mean = tf.get_variable('pop_mean', [size],
+          initializer=tf.zeros_initializer(), trainable=False)
+        pop_var = tf.get_variable('pop_var', [size],
+          initializer=tf.ones_initializer(), trainable=False)
     batch_mean, batch_var = tf.nn.moments(x, [0])
 
     train_mean_op = tf.assign(pop_mean,
