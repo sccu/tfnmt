@@ -32,6 +32,7 @@ tf.app.flags.DEFINE_integer("num_samples", 2048,
 tf.app.flags.DEFINE_string("out_dir", "out", "Output directory")
 
 tf.app.flags.DEFINE_boolean("inference", False, "Inference mode")
+tf.app.flags.DEFINE_boolean("use_bn", False, "Use batch normalization")
 
 
 def train():
@@ -48,7 +49,8 @@ def train():
     LOG.info("Building model...")
     model = Seq2SeqModel(FLAGS.cell_size, FLAGS.stack_size, FLAGS.batch_size,
       FLAGS.seq_len, FLAGS.vocab_size, FLAGS.embedding_size,
-      FLAGS.learning_rate, dropout=FLAGS.dropout, num_samples=FLAGS.num_samples)
+      FLAGS.learning_rate, dropout=FLAGS.dropout, num_samples=FLAGS.num_samples,
+      use_bn=FLAGS.use_bn)
     saver = tf.train.Saver()
 
     checkpoint = tf.train.get_checkpoint_state(out_dir)

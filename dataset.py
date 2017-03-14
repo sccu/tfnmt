@@ -59,7 +59,7 @@ class DataSet(object):
         for w in words:
           vocab_counter[w] += 1
     words = self.predefined_words + [entry[0] for entry in
-      vocab_counter.most_common( self.vocab_size - len(self.predefined_words))]
+      vocab_counter.most_common(self.vocab_size - len(self.predefined_words))]
     return words
 
   def __init__(self, src_train, tgt_train, src_test, tgt_test, seq_len,

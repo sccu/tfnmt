@@ -32,7 +32,7 @@ def attentional_hidden_state(ht, hiddens, score=dot_score):
 class Seq2SeqModel(object):
   def __init__(self, cell_size, stack_size, batch_size, seq_len, vocab_size,
       embedding_size, learning_rate, learning_rate_decaying_factor=0.8,
-      num_samples=2048, max_gradient_norm=5.0, dropout=0.3, BOS_ID=0,
+      num_samples=2048, use_bn=False, max_gradient_norm=5.0, dropout=0.3, BOS_ID=0,
       PAD_ID=2):
     self.BOS_ID = BOS_ID
     self.PAD_ID = PAD_ID
@@ -59,7 +59,7 @@ class Seq2SeqModel(object):
 
       LOG.info("Creating rnn encoder...")
       hiddens, enc_state = self.create_rnn_encoder(cell_size, stack_size,
-        batch_size)
+        batch_size, use_bn=use_bn)
 
       LOG.info("Creating rnn decoder...")
       w_t = tf.get_variable("proj_w", [vocab_size, cell_size])
@@ -68,7 +68,7 @@ class Seq2SeqModel(object):
       self.output_projection = (w, b)
 
       ret = self.create_rnn_decoder(enc_state, cell_size, stack_size,
-        hiddens=hiddens)
+        hiddens=hiddens, use_bn=use_bn)
       self.dec_outputs = ret[:seq_len]
       self.inference_outputs = [tf.argmax(
         tf.nn.xw_plus_b(o, self.output_projection[0],
@@ -142,9 +142,12 @@ class Seq2SeqModel(object):
       self.enc_inputs.append(tf.reshape(enc_inputs[i], [-1]))
       self.dec_inputs.append(tf.reshape(dec_inputs[i], [-1]))
 
-  def create_rnn_encoder(self, cell_size, stack_size, batch_size):
+  def create_rnn_encoder(self, cell_size, stack_size, batch_size, use_bn=False):
     with tf.variable_scope("rnn_encoder") as scope:
-      cell = BNLSTMCell(cell_size, tf.logical_not(self.for_inference))
+      if use_bn:
+        cell = BNLSTMCell(cell_size, tf.logical_not(self.for_inference))
+      else:
+        cell = BasicLSTMCell(cell_size)
       if self.dropout != 0.0:
         cell = DropoutWrapper(cell, output_keep_prob=1 - self.dropout_op)
       cell = MultiRNNCell([cell] * stack_size)
@@ -163,7 +166,7 @@ class Seq2SeqModel(object):
       return outputs, state
 
   def create_rnn_decoder(self, encoder_state, cell_size, stack_size,
-      hiddens=None):
+      hiddens=None, use_bn=False):
     """
     Make up an RNN decoder.
 
@@ -174,7 +177,10 @@ class Seq2SeqModel(object):
     :return: outputs is a list of tensors which shape is [seq_len, embedding_size]. state's shape is [None, cell_size]
     """
     with tf.variable_scope("rnn_decoder") as scope:
-      cell = BNLSTMCell(cell_size, tf.logical_not(self.for_inference))
+      if use_bn:
+        cell = BNLSTMCell(cell_size, tf.logical_not(self.for_inference))
+      else:
+        cell = BasicLSTMCell(cell_size)
       if self.dropout != 0.0:
         cell = DropoutWrapper(cell, output_keep_prob=1.0 - self.dropout_op)
       cell = MultiRNNCell([cell] * stack_size)
